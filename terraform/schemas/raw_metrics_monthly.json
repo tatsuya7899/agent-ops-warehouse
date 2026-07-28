@@ -1,0 +1,53 @@
+[
+  {
+    "name": "month",
+    "type": "DATE",
+    "mode": "REQUIRED",
+    "description": "First day of month"
+  },
+  {
+    "name": "note_articles",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "note_views",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "note_likes",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "note_comments",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "x_posts",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "x_impressions",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "x_followers_total",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "note_text",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "loaded_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED"
+  }
+]

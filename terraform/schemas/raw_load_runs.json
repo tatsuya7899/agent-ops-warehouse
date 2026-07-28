@@ -1,0 +1,23 @@
+[
+  {
+    "name": "run_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "source",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "rows_loaded",
+    "type": "INTEGER",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "exclusions_note",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "What was skipped and why (auditability of the allowlist)"
+  }
+]

@@ -1,0 +1,32 @@
+[
+  {
+    "name": "filename",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "published_date",
+    "type": "DATE",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "title",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "gate_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "char_count",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "loaded_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED"
+  }
+]

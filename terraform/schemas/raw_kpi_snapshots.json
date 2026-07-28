@@ -1,0 +1,42 @@
+[
+  {
+    "name": "snapshot_date",
+    "type": "DATE",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "kpi_c_achieved",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "kpi_c_total",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "streak_weeks",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "recent_two_week_pubs",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "evidence_ships",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "monthly_ships",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "loaded_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED"
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "name": "stat_date",
+    "type": "DATE",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "session_count",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "user_messages",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "assistant_messages",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "tool_calls",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "distinct_tools",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "loaded_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "Aggregates only; transcript text never leaves the machine"
+  }
+]

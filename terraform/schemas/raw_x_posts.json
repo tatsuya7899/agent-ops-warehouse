@@ -1,0 +1,33 @@
+[
+  {
+    "name": "posted_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "post_type",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "stock_single | stock_thread | flow"
+  },
+  {
+    "name": "theme",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "url",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "char_count",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "loaded_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED"
+  }
+]
