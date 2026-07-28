@@ -9,6 +9,10 @@ variable "bq_location" {
   default     = "US"
 }
 
+# tflint-ignore: terraform_unused_declarations
+# Referenced from P3 (Cloud Run). Declared now to pin the free-tier region
+# decision (us-central1) made in the adversarial review — regions are the kind
+# of default you get wrong silently.
 variable "run_region" {
   description = "Cloud Run / GCS region. us-central1 is inside the Always Free tier."
   type        = string
