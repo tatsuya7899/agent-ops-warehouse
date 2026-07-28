@@ -1,0 +1,25 @@
+# Internal governance / planning documents.
+# This repository will go public (P1); internal docs stay local until
+# their public equivalents (English README, etc.) replace them.
+SPEC-*.md
+CHECKLIST.md
+README.md
+
+# Generated artifacts
+out/
+*.ndjson
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+venv/
+.venv/
+
+# Terraform secrets (introduced in P1; ignored ahead of time)
+terraform.tfvars
+.terraform/
+
+# OS
+.DS_Store
