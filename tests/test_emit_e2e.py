@@ -135,8 +135,8 @@ def test_cli_end_to_end_all_four_sources(tmp_path):
         "| Xインプレ計 | **プロフィールクリック** | フォロワー増 | 一行所見 |\n"
         "|----|----------|-----------|-------|----------|--------"
         "|------------|----------------------|-----------|---------|\n"
-        "| 2026-07 | 15 | **119** | **4** | **0** | **0** | — | 取得不可 "
-        "| 0(累計76人) | 平均7.9view/記事 |\n",
+        "| 2026-01 | 3 | **42** | **1** | **0** | **0** | — | 取得不可 "
+        "| 0(累計12人) | synthetic note |\n",
         encoding="utf-8",
     )
 
@@ -177,7 +177,7 @@ def test_cli_end_to_end_all_four_sources(tmp_path):
 
     metrics = _read_ndjson(out_dir / "raw_metrics_monthly.ndjson")
     assert len(metrics) == 1
-    assert metrics[0]["month"] == "2026-07-01"
+    assert metrics[0]["month"] == "2026-01-01"
     assert metrics[0]["x_followers_total"] == 0
 
     load_runs = _read_ndjson(out_dir / "raw_load_runs.ndjson")
@@ -228,8 +228,8 @@ def test_cli_end_to_end_all_sources_stamp_loaded_at(tmp_path):
         "| Xインプレ計 | **プロフィールクリック** | フォロワー増 | 一行所見 |\n"
         "|----|----------|-----------|-------|----------|--------"
         "|------------|----------------------|-----------|---------|\n"
-        "| 2026-07 | 15 | **119** | **4** | **0** | **0** | — | 取得不可 "
-        "| 0(累計76人) | 平均7.9view/記事 |\n",
+        "| 2026-01 | 3 | **42** | **1** | **0** | **0** | — | 取得不可 "
+        "| 0(累計12人) | synthetic note |\n",
         encoding="utf-8",
     )
 

@@ -88,18 +88,50 @@ def test_extract_session_stats_aggregates_multiple_files_same_day(tmp_path):
     assert row["user_messages"] == 2
 
 
-def test_extract_session_stats_excludes_company_dir(tmp_path):
-    company_dir = tmp_path / "-Users-example-Developer-strategic-planning"
-    company_dir.mkdir()
+def test_extract_session_stats_excludes_dir_via_argument(tmp_path):
+    excluded_dir = tmp_path / "-Users-example-Developer-synthetic-excluded"
+    excluded_dir.mkdir()
     _write_jsonl(
-        company_dir / "secret.jsonl",
+        excluded_dir / "secret.jsonl",
         [{"type": "user", "timestamp": "2026-07-09T00:00:00.000Z", "message": {"role": "user", "content": "secret"}}],
     )
 
-    result = extract_session_stats([str(company_dir)])
+    result = extract_session_stats(
+        [str(excluded_dir)], excluded_dir_substrings=("-synthetic-excluded",)
+    )
 
     assert result.rows == []
-    assert result.skipped_dirs == ["-Users-example-Developer-strategic-planning"]
+    assert result.skipped_dirs == ["-Users-example-Developer-synthetic-excluded"]
+
+
+def test_extract_session_stats_excludes_dir_via_env_var(tmp_path, monkeypatch):
+    monkeypatch.setenv("AOW_EXCLUDED_DIRS", "-synthetic-excluded")
+    excluded_dir = tmp_path / "-Users-example-Developer-synthetic-excluded"
+    excluded_dir.mkdir()
+    _write_jsonl(
+        excluded_dir / "secret.jsonl",
+        [{"type": "user", "timestamp": "2026-07-09T00:00:00.000Z", "message": {"role": "user", "content": "secret"}}],
+    )
+
+    result = extract_session_stats([str(excluded_dir)])
+
+    assert result.rows == []
+    assert result.skipped_dirs == ["-Users-example-Developer-synthetic-excluded"]
+
+
+def test_extract_session_stats_default_excluded_dirs_empty_when_env_unset(tmp_path, monkeypatch):
+    monkeypatch.delenv("AOW_EXCLUDED_DIRS", raising=False)
+    session_dir = tmp_path / "-Users-example-Developer"
+    session_dir.mkdir()
+    _write_jsonl(
+        session_dir / "session-a.jsonl",
+        [{"type": "user", "timestamp": "2026-07-09T00:00:00.000Z", "message": {"role": "user", "content": "hi"}}],
+    )
+
+    result = extract_session_stats([str(session_dir)])
+
+    assert result.skipped_dirs == []
+    assert len(result.rows) == 1
 
 
 def test_extract_session_stats_falls_back_to_mtime_when_no_timestamp(tmp_path):

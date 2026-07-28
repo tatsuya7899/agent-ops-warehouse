@@ -6,14 +6,15 @@ jsonl body text (prompts, tool inputs/outputs, file paths) is emitted
 (SPEC-agent-ops-warehouse.md Section 2: "セッションログはローカルで集計
 してから集計値のみをBQへ").
 
-Company session directories (whose basename contains "-strategic-
-planning", e.g. the real
-`~/.claude/projects/-Users-tatsuyasasaki-Developer-strategic-planning/`)
-are excluded via an explicit substring check -- the same
+Directories matching any excluded substring are skipped (configurable
+via AOW_EXCLUDED_DIRS, a comma-separated list of basename substrings;
+defaults to empty, i.e. nothing excluded, when unset) -- the same
 never-silently-dropped, always-reported-back pattern as the repo
 allowlist in extract_git.py. Excluded directories are recorded in
 SessionStatsResult.skipped_dirs even when passed in explicitly by the
-caller.
+caller. Callers that need a specific set of substrings regardless of
+the environment (e.g. tests) can pass `excluded_dir_substrings`
+explicitly to `extract_session_stats()`.
 
 Each *.jsonl file directly under a surviving directory is treated as one
 session and contributes to exactly one stat_date: the date of the first
@@ -29,12 +30,22 @@ the CLI records in the raw_load_runs ledger note.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-EXCLUDED_DIR_SUBSTRING = "-strategic-planning"
+ENV_EXCLUDED_DIRS = "AOW_EXCLUDED_DIRS"
 COUNTED_TYPES = {"user", "assistant"}
+
+
+def _default_excluded_dirs() -> tuple[str, ...]:
+    """Read the excluded-substring list from AOW_EXCLUDED_DIRS (comma-
+    separated), defaulting to an empty tuple (nothing excluded) when the
+    env var is unset or blank.
+    """
+    raw = os.environ.get(ENV_EXCLUDED_DIRS, "")
+    return tuple(part.strip() for part in raw.split(",") if part.strip())
 
 
 @dataclass
@@ -44,10 +55,20 @@ class SessionStatsResult:
     skipped_lines: int = 0
 
 
-def extract_session_stats(session_dirs: list[str]) -> SessionStatsResult:
+def extract_session_stats(
+    session_dirs: list[str],
+    excluded_dir_substrings: tuple[str, ...] | None = None,
+) -> SessionStatsResult:
     """Extract daily aggregate rows (raw_session_stats schema) from the
     given `~/.claude/projects/<dir>/` session directories.
+
+    excluded_dir_substrings overrides the AOW_EXCLUDED_DIRS env var when
+    given explicitly (used by tests); defaults to the env var's value
+    (an empty tuple when unset).
     """
+    if excluded_dir_substrings is None:
+        excluded_dir_substrings = _default_excluded_dirs()
+
     by_date: dict[str, dict] = {}
     skipped_dirs: list[str] = []
     skipped_lines = 0
@@ -55,7 +76,7 @@ def extract_session_stats(session_dirs: list[str]) -> SessionStatsResult:
     for dir_path in session_dirs:
         directory = Path(dir_path)
 
-        if EXCLUDED_DIR_SUBSTRING in directory.name:
+        if any(substring in directory.name for substring in excluded_dir_substrings):
             skipped_dirs.append(directory.name)
             continue
 

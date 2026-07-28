@@ -29,8 +29,8 @@ def _write_metrics(path, table_body: str) -> None:
 def test_extract_metrics_normal_case(tmp_path):
     _write_metrics(
         tmp_path,
-        "| 2026-07 | 15 | **119** | **4** | **0** | **0** | — | 取得不可 "
-        "| 0(累計76人) | 平均7.9view/記事 |\n",
+        "| 2026-01 | 3 | **42** | **1** | **0** | **0** | — | 取得不可 "
+        "| 0(累計12人) | synthetic note |\n",
     )
 
     result = extract_metrics(tmp_path / "METRICS.md")
@@ -48,15 +48,15 @@ def test_extract_metrics_normal_case(tmp_path):
         "x_followers_total",
         "note_text",
     }
-    assert row["month"] == "2026-07-01"
-    assert row["note_articles"] == 15
-    assert row["note_views"] == 119
-    assert row["note_likes"] == 4
+    assert row["month"] == "2026-01-01"
+    assert row["note_articles"] == 3
+    assert row["note_views"] == 42
+    assert row["note_likes"] == 1
     assert row["note_comments"] == 0
     assert row["x_posts"] == 0
     assert row["x_impressions"] is None
     assert row["x_followers_total"] == 0
-    assert row["note_text"] == "平均7.9view/記事"
+    assert row["note_text"] == "synthetic note"
 
 
 def test_extract_metrics_null_markers_become_none(tmp_path):

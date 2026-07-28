@@ -70,10 +70,10 @@ def test_extract_git_commits_empty_repo(tmp_path):
 
 
 def test_extract_git_commits_skips_repo_outside_allowlist(tmp_path):
-    repo = _init_repo(tmp_path / "strategic-planning")
+    repo = _init_repo(tmp_path / "excluded-repo")
     _commit(repo, "secret.txt", "company stuff\n", "company commit")
 
     result = extract_git_commits([str(repo)], allowed_repos=("note-articles",))
 
     assert result.rows == []
-    assert result.skipped_repos == ["strategic-planning"]
+    assert result.skipped_repos == ["excluded-repo"]

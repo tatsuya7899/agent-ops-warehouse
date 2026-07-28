@@ -1,11 +1,11 @@
 """Extract git commit history from personal repositories.
 
-Company repositories (e.g. strategic-planning) are excluded via an
-explicit allowlist mechanism rather than a denylist, so the exclusion
-logic is auditable directly from public source code
-(SPEC-agent-ops-warehouse.md Section 2 / Section 3.1). Repositories not
-present in the allowlist are skipped explicitly and reported back to the
-caller -- never silently dropped, never raised as an error.
+Non-personal repositories are excluded via an explicit allowlist
+mechanism rather than a denylist, so the exclusion logic is auditable
+directly from public source code (SPEC-agent-ops-warehouse.md Section 2
+/ Section 3.1). Repositories not present in the allowlist are skipped
+explicitly and reported back to the caller -- never silently dropped,
+never raised as an error.
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 # Personal repositories only, as enumerated in SPEC Section 3.1.
-# Company repositories are never listed here.
+# Non-personal repositories are never listed here.
 ALLOWED_REPOS: tuple[str, ...] = (
     "Developer",
     "note-articles",

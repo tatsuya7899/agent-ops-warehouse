@@ -2,7 +2,7 @@
 
 Operational telemetry for a one-person AI-agent organization — a BigQuery warehouse, managed entirely by Terraform, running entirely inside GCP's free tier.
 
-I run a small organization of AI agents (7 role-defined agents under written governance rules) that ships articles, code, and reviews. This repository is the instrument panel for that organization: what it commits, what it publishes, what its review gates catch, and what it costs — as queryable tables instead of anecdotes.
+I run a small personal studio of AI agents (7 role-defined agents under written governance rules) that ships articles, code, and reviews — separate from the larger agent organization I operate at work. This repository is the instrument panel for that organization: what it commits, what it publishes, what its review gates catch, and what it costs — as queryable tables instead of anecdotes.
 
 > **Fork-and-deploy**: `terraform apply` + `python -m loader` gives you the same warehouse in *your* GCP project, on the free tier, in minutes. This repo is a template, not just a diary.
 
@@ -45,7 +45,7 @@ Design decisions worth stealing (or arguing with):
 
 ## Privacy boundary
 
-Sources are personal repositories and personal logs only. Session telemetry is aggregated locally — counts per day, never content. Commit subjects are loaded for private analysis but never rendered on public surfaces; sample data in tests is synthetic. Employer information is excluded by an allowlist you can read in the loader.
+Sources are personal repositories and personal logs only. Session telemetry is aggregated locally — counts per day, never content. Commit subjects are loaded for private analysis but never rendered on public surfaces; sample data in tests is synthetic (no real metrics, filenames, or commit subjects). Employer information is excluded by an allowlist you can read in the loader.
 
 ## Quickstart
 
@@ -62,17 +62,17 @@ for t in git_commits articles; do
 done
 ```
 
-Free-tier envelope: BigQuery sandbox works without a card (tables expire in 60 days); enabling billing removes the expiration — visible here as Terraform drift, which is exactly how a checklist item should be encoded.
+Free-tier envelope: BigQuery sandbox works without a card (tables expire in 60 days). Enabling billing does **not** clear an existing dataset's default expiration — the dataset must be updated (or recreated), which surfaces here as Terraform drift; that is exactly how a checklist item should be encoded.
 
 ## Development
 
 ```bash
-pytest -q          # 36+ tests, TDD-first
+pytest -q          # 46 tests, TDD-first
 ruff check .       # lint
 terraform fmt -check && terraform validate
 ```
 
-CI runs all of the above plus tflint on every push.
+CI runs all of the above plus tflint on pushes to `main` and on pull requests.
 
 ## Roadmap
 

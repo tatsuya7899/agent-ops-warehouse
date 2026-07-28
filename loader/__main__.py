@@ -75,8 +75,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=[],
         help=(
             "Paths to ~/.claude/projects/<dir>/ session directories. "
-            "Company directories (basename containing '-strategic-planning') "
-            "are skipped explicitly even if passed here."
+            "Directories whose basename matches a substring in "
+            "AOW_EXCLUDED_DIRS (comma-separated) are skipped explicitly "
+            "even if passed here."
         ),
     )
     parser.add_argument(
@@ -218,7 +219,7 @@ def run(argv: list[str] | None = None) -> list[dict]:
         skipped_dirs = ", ".join(result.skipped_dirs) if result.skipped_dirs else "none"
         note = (
             f"scanned {len(args.sessions)} session dir(s); "
-            f"skipped {len(result.skipped_dirs)} company dir(s): {skipped_dirs}; "
+            f"skipped {len(result.skipped_dirs)} excluded dir(s): {skipped_dirs}; "
             f"skipped_lines={result.skipped_lines}"
         )
         load_runs.append(build_load_run("raw_session_stats", n, note))

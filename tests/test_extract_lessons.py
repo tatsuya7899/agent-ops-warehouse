@@ -14,7 +14,7 @@ def _write(path, name: str, content: str = "# Lesson\n\nbody\n") -> None:
 
 
 def test_extract_lessons_active_case(tmp_path):
-    _write(tmp_path, "LESSON-20260704-001_OGメタデータの三重罠.md")
+    _write(tmp_path, "LESSON-20260101-001_sample_lesson.md")
 
     result = extract_lessons(tmp_path)
 
@@ -28,10 +28,10 @@ def test_extract_lessons_active_case(tmp_path):
         "status",
         "graduated_to",
     }
-    assert row["lesson_id"] == "LESSON-20260704-001"
-    assert row["created_date"] == "2026-07-04"
+    assert row["lesson_id"] == "LESSON-20260101-001"
+    assert row["created_date"] == "2026-01-01"
     assert row["seq"] == 1
-    assert row["title"] == "OGメタデータの三重罠"
+    assert row["title"] == "sample_lesson"
     assert row["status"] == "active"
     assert row["graduated_to"] is None
     assert result.skipped_files == []
