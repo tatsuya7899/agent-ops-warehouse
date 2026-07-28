@@ -3,7 +3,6 @@
 # their public equivalents (English README, etc.) replace them.
 SPEC-*.md
 CHECKLIST.md
-README.md
 
 # Generated artifacts
 out/
@@ -23,3 +22,4 @@ terraform.tfvars
 
 # OS
 .DS_Store
+GOVERNANCE-POINTER.md
