@@ -38,12 +38,12 @@ def _read_ndjson(path: Path) -> list[dict]:
 
 def test_cli_end_to_end_writes_ndjson_and_load_ledger(tmp_path):
     # "note-articles" is in loader.extract_git.ALLOWED_REPOS by name;
-    # "strategic-planning" deliberately is not, exercising the real
+    # "not-allowlisted-repo" deliberately is not, exercising the real
     # production allowlist end to end (no monkeypatching needed).
     repo = _init_repo(tmp_path / "note-articles")
     _commit(repo, "a.txt", "hello\n", "first commit")
 
-    excluded_repo = _init_repo(tmp_path / "strategic-planning")
+    excluded_repo = _init_repo(tmp_path / "not-allowlisted-repo")
     _commit(excluded_repo, "secret.txt", "company\n", "company commit")
 
     articles_dir = tmp_path / "published"
@@ -98,7 +98,7 @@ def test_cli_end_to_end_writes_ndjson_and_load_ledger(tmp_path):
 
     git_run = next(r for r in load_runs if r["source"] == "raw_git_commits")
     assert git_run["rows_loaded"] == 1
-    assert "strategic-planning" in git_run["exclusions_note"]
+    assert "not-allowlisted-repo" in git_run["exclusions_note"]
 
     articles_run = next(r for r in load_runs if r["source"] == "raw_articles")
     assert articles_run["rows_loaded"] == 1
