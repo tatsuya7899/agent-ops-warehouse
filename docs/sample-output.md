@@ -24,17 +24,17 @@ Captured 2026-07-28 against the real warehouse (sandbox mode). Text output is co
 +--------+---------+------------+------------+
 
 ═══ load_ledger_audit.sql ═══
-+---------------------+---------------------+-------------+-------------------------------------------------------------------------------+
-|       run_at        |       source        | rows_loaded |                                exclusions_note                                |
-+---------------------+---------------------+-------------+-------------------------------------------------------------------------------+
-| 2026-07-28 21:46:46 | raw_kpi_snapshots   |           1 | all KPI fields computed via generate_status.py                                |
-| 2026-07-28 21:46:46 | raw_session_stats   |          10 | scanned 1 session dir(s); skipped 0 company dir(s): none; skipped_lines=11652 |
-| 2026-07-28 21:46:45 | raw_x_posts         |           1 | skipped 0 unrecorded/unparseable row(s): none                                 |
-| 2026-07-28 21:46:45 | raw_metrics_monthly |           1 | parsed 1 monthly row(s) from the Section 1 summary table                      |
-| 2026-07-28 21:46:45 | raw_lessons         |          20 | skipped 1 filename-convention violation(s): LESSON_TEMPLATE.md                |
-| 2026-07-28 21:46:45 | raw_articles        |          15 | skipped 0 filename-convention violation(s): none                              |
-| 2026-07-28 21:46:45 | raw_git_commits     |         188 | scanned 5 repo(s); skipped 0 not in allowlist: none                           |
-+---------------------+---------------------+-------------+-------------------------------------------------------------------------------+
++---------------------+---------------------+-------------+--------------------------------------------------------------------------------+
+|       run_at        |       source        | rows_loaded |                                exclusions_note                                 |
++---------------------+---------------------+-------------+--------------------------------------------------------------------------------+
+| 2026-07-28 22:35:54 | raw_kpi_snapshots   |           1 | all KPI fields computed via generate_status.py                                 |
+| 2026-07-28 22:35:54 | raw_session_stats   |          10 | scanned 1 session dir(s); skipped 0 excluded dir(s): none; skipped_lines=11767 |
+| 2026-07-28 22:35:53 | raw_x_posts         |           1 | skipped 0 unrecorded/unparseable row(s): none                                  |
+| 2026-07-28 22:35:53 | raw_metrics_monthly |           1 | parsed 1 monthly row(s) from the Section 1 summary table                       |
+| 2026-07-28 22:35:53 | raw_lessons         |          20 | skipped 1 filename-convention violation(s): LESSON_TEMPLATE.md                 |
+| 2026-07-28 22:35:53 | raw_articles        |          15 | skipped 0 filename-convention violation(s): none                               |
+| 2026-07-28 22:35:53 | raw_git_commits     |         197 | scanned 5 repo(s); skipped 0 not in allowlist: none                            |
++---------------------+---------------------+-------------+--------------------------------------------------------------------------------+
 
 ═══ publishing_cadence.sql ═══
 +----------+----------+
