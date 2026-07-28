@@ -258,7 +258,7 @@ def _run_merge_flag(args: argparse.Namespace, out_dir: Path) -> None:
     config = TableConfig(
         project=args.project,
         dataset=args.dataset,
-        table="raw_git_commits",
+        table="git_commits",  # BQ table_id per terraform/main.tf (dataset "raw", no raw_ prefix)
         key_columns=GIT_COMMITS_KEY_COLUMNS,
         all_columns=GIT_COMMITS_ALL_COLUMNS,
         source_uri=str(out_dir / "raw_git_commits.ndjson"),
