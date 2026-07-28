@@ -5,14 +5,29 @@
 Orchestrates extraction (git commits, published articles, LESSON
 filenames, METRICS.md monthly summary, X-STRATEGY.md post log, Claude
 Code session jsonl aggregates, a CAREER-KPI snapshot) and NDJSON
-emission. No BigQuery dependency -- P0 scope stops at NDJSON generation
-(SPEC-agent-ops-warehouse.md Section 5, phase P0).
+emission. No BigQuery dependency by default -- P0 scope stops at NDJSON
+generation (SPEC-agent-ops-warehouse.md Section 5, phase P0).
+
+`--merge` is the one opt-in exception: it builds (and, only with
+`--execute`, runs) a MERGE-based dedup load plan for raw_git_commits
+(Section 3.3). Executing it for real requires billing enabled on the
+target GCP project -- the P0 sandbox rejects DML outright -- so
+`--execute` is never exercised in this repo's own CI/test runs.
 """
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
 
+from loader.bq_merge import (
+    GIT_COMMITS_ALL_COLUMNS,
+    GIT_COMMITS_KEY_COLUMNS,
+    TableConfig,
+    bq_cli_runner,
+    build_load_plan,
+    describe_step,
+    run_plan,
+)
 from loader.emit import build_load_run, stamp_loaded_at, write_ndjson
 from loader.extract_articles import extract_articles
 from loader.extract_git import extract_git_commits
@@ -95,6 +110,36 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Override path to a STATUS.md file for monthly_ships "
             "(default: <Developer>/STATUS.md). Only used with --kpi."
         ),
+    )
+    parser.add_argument(
+        "--merge",
+        action="store_true",
+        help=(
+            "Build a MERGE-based dedup load plan for raw_git_commits "
+            "(SPEC Section 3.3; requires --repos, --project, --dataset). "
+            "Without --execute, only prints a dry-run plan -- this is "
+            "the default and never touches BigQuery."
+        ),
+    )
+    parser.add_argument(
+        "--execute",
+        action="store_true",
+        help=(
+            "Actually run the --merge plan via the `bq` CLI. Requires "
+            "billing enabled on the target project (the P0 sandbox "
+            "rejects DML). Without this flag, --merge only prints the "
+            "plan (dry run)."
+        ),
+    )
+    parser.add_argument(
+        "--project",
+        default=None,
+        help="GCP project id (required with --merge).",
+    )
+    parser.add_argument(
+        "--dataset",
+        default=None,
+        help="BigQuery dataset id (required with --merge).",
     )
     parser.add_argument(
         "--out",
@@ -189,7 +234,45 @@ def run(argv: list[str] | None = None) -> list[dict]:
         load_runs.append(build_load_run("raw_kpi_snapshots", n, result.note))
 
     write_ndjson(load_runs, out_dir / "raw_load_runs.ndjson")
+
+    if args.merge:
+        _run_merge_flag(args, out_dir)
+
     return load_runs
+
+
+def _run_merge_flag(args: argparse.Namespace, out_dir: Path) -> None:
+    """Build (and, with --execute, run) the raw_git_commits MERGE plan.
+
+    Split out from `run()` so the "what does --merge require" checks
+    stay next to each other rather than buried mid-orchestration.
+    """
+    if not args.repos:
+        raise SystemExit(
+            "--merge requires --repos: its source_uri is the "
+            "raw_git_commits.ndjson this same invocation emits."
+        )
+    if not args.project or not args.dataset:
+        raise SystemExit("--merge requires --project and --dataset.")
+
+    config = TableConfig(
+        project=args.project,
+        dataset=args.dataset,
+        table="raw_git_commits",
+        key_columns=GIT_COMMITS_KEY_COLUMNS,
+        all_columns=GIT_COMMITS_ALL_COLUMNS,
+        source_uri=str(out_dir / "raw_git_commits.ndjson"),
+    )
+    steps = build_load_plan([config])
+
+    if not args.execute:
+        for step in steps:
+            print(describe_step(step))
+        return
+
+    for step, result in zip(steps, run_plan(steps, bq_cli_runner)):
+        status = "OK" if result.ok else "FAILED"
+        print(f"[{status}] {step.kind} {step.table}: {result.detail}")
 
 
 if __name__ == "__main__":
