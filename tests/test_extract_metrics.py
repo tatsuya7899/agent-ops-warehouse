@@ -48,7 +48,7 @@ def test_extract_metrics_normal_case(tmp_path):
         "x_followers_total",
         "note_text",
     }
-    assert row["month"] == "2026-07"
+    assert row["month"] == "2026-07-01"
     assert row["note_articles"] == 15
     assert row["note_views"] == 119
     assert row["note_likes"] == 4

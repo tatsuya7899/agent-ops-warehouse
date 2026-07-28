@@ -84,10 +84,12 @@ def _log_commits(repo: Path) -> list[dict]:
         ["git", "-C", str(repo), "log", f"--format=%H{_FIELD_SEP}%cI{_FIELD_SEP}%s"],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode != 0:
         # An empty repository (no commits yet) exits non-zero here; treat
-        # as "no commits" rather than an error.
+        # as "no commits" rather than an error. check=False is
+        # deliberate: the non-zero exit is inspected below, not raised.
         return []
 
     commits = []
@@ -112,6 +114,7 @@ def _log_shortstats(repo: Path) -> dict[str, dict]:
         ["git", "-C", str(repo), "log", f"--format={marker}%H", "--shortstat"],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode != 0:
         return {}

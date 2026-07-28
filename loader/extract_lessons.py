@@ -31,7 +31,7 @@ class LessonExtractionResult:
     skipped_files: list[str] = field(default_factory=list)
 
 
-def extract_lessons(lessons_dir) -> "LessonExtractionResult":
+def extract_lessons(lessons_dir) -> LessonExtractionResult:
     """Extract lesson rows (raw_lessons schema) from a lessons/ dir.
 
     Files whose name does not match FILENAME_PATTERN are skipped

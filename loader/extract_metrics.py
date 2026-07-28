@@ -59,7 +59,7 @@ class MetricsExtractionResult:
     rows: list[dict] = field(default_factory=list)
 
 
-def extract_metrics(metrics_path) -> "MetricsExtractionResult":
+def extract_metrics(metrics_path) -> MetricsExtractionResult:
     """Extract monthly rows (raw_metrics_monthly schema) from METRICS.md.
 
     Returns an empty result (never raises) if the file is missing or the
@@ -132,8 +132,17 @@ def _is_separator_row(line: str) -> bool:
     return all(re.match(r"^[\-: ]+$", c) for c in cells)
 
 
+_MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
+
+
 def _parse_value(field_name: str, raw_cell: str):
     cleaned = _clean_cell(raw_cell)
+    if field_name == "month":
+        # BQ DATE columns need a full date; the table stores "YYYY-MM"
+        # so the first day of the month is appended (schema note: "First
+        # day of month"). Anything not matching the expected shape is
+        # passed through verbatim rather than guessed at.
+        return f"{cleaned}-01" if _MONTH_RE.match(cleaned) else cleaned
     if field_name in STRING_FIELDS:
         return cleaned
     if cleaned in NULL_MARKERS:
