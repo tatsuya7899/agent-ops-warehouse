@@ -1,0 +1,25 @@
+# Committed on purpose: this file contains zero secrets.
+#
+# Fork-and-deploy design (SPEC section 3.3 / section 4): auth is ADC
+# (`gcloud auth application-default login`, already required by Terraform),
+# and the project id is never hardcoded so a fork just points AOW_PROJECT_ID
+# at its own GCP project.
+#
+# Run with:
+#   AOW_PROJECT_ID=your-project dbt build --profiles-dir .
+agent_ops_warehouse:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('AOW_PROJECT_ID') }}"
+      # Default dataset for the connection. Every model sets its own dataset
+      # explicitly via generate_schema_name (macros/generate_schema_name.sql),
+      # so this is only a fallback -- it must never be "raw" (write-protected
+      # by SPEC section 0: raw is a faithful replica loaded only by loader/).
+      dataset: staging
+      location: US
+      threads: 4
+      job_execution_timeout_seconds: 300
+      job_retries: 1

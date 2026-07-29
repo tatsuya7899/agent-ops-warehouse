@@ -1,0 +1,103 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Faithful replicas of the local system of record (git history,
+      Markdown files, local session-log aggregates). Never written to by
+      dbt -- loaded exclusively by loader/ (SPEC section 3.3).
+    schema: raw
+    tables:
+      - name: git_commits
+        description: One row per commit across the personal repos in scope.
+        columns:
+          - name: repo
+            description: Repository basename (allowlist-checked; personal repos only).
+          - name: commit_hash
+          - name: committed_at
+          - name: subject
+            description: Never rendered raw on public surfaces (SPEC section 2).
+          - name: files_changed
+          - name: insertions
+          - name: deletions
+          - name: loaded_at
+
+      - name: articles
+        description: One row per published note-articles/ entry.
+        columns:
+          - name: filename
+          - name: published_date
+          - name: title
+          - name: gate_id
+          - name: char_count
+          - name: loaded_at
+
+      - name: x_posts
+        description: One row per recorded X post.
+        columns:
+          - name: posted_at
+          - name: post_type
+            description: "stock_single | stock_thread | flow"
+          - name: theme
+          - name: url
+          - name: char_count
+          - name: loaded_at
+
+      - name: metrics_monthly
+        description: Append-only monthly summary parsed from note-articles/METRICS.md.
+        columns:
+          - name: month
+            description: First day of month.
+          - name: note_articles
+          - name: note_views
+          - name: note_likes
+          - name: note_comments
+          - name: x_posts
+          - name: x_impressions
+          - name: x_followers_total
+          - name: note_text
+          - name: loaded_at
+
+      - name: lessons
+        description: One row per LESSON file (active and archived both included).
+        columns:
+          - name: lesson_id
+          - name: created_date
+          - name: seq
+          - name: title
+          - name: status
+            description: "active | archived"
+          - name: graduated_to
+          - name: loaded_at
+
+      - name: session_stats
+        description: Aggregates only -- transcript text never leaves the machine.
+        columns:
+          - name: stat_date
+          - name: session_count
+          - name: user_messages
+          - name: assistant_messages
+          - name: tool_calls
+          - name: distinct_tools
+          - name: loaded_at
+
+      - name: kpi_snapshots
+        description: Snapshot of generate_status.py's KPI computation.
+        columns:
+          - name: snapshot_date
+          - name: kpi_c_achieved
+          - name: kpi_c_total
+          - name: streak_weeks
+          - name: recent_two_week_pubs
+          - name: evidence_ships
+          - name: monthly_ships
+          - name: loaded_at
+
+      - name: load_runs
+        description: Load ledger -- what was loaded and what was excluded, per run.
+        columns:
+          - name: run_at
+          - name: source
+          - name: rows_loaded
+          - name: exclusions_note
+            description: What was skipped and why (auditability of the allowlist).

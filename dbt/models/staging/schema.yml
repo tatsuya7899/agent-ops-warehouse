@@ -1,0 +1,78 @@
+version: 2
+
+models:
+  - name: stg_git_commits
+    description: Typed, trimmed view over raw.git_commits.
+    columns:
+      - name: repo
+        tests: [not_null]
+      - name: commit_hash
+        tests: [not_null]
+      - name: committed_at
+        tests: [not_null]
+    tests:
+      - unique_combination_of_columns:
+          arguments:
+            combination_of_columns: ["repo", "commit_hash"]
+
+  - name: stg_articles
+    description: Typed, trimmed view over raw.articles.
+    columns:
+      - name: filename
+        tests: [not_null, unique]
+      - name: published_date
+        tests: [not_null]
+
+  - name: stg_x_posts
+    description: Typed, trimmed view over raw.x_posts.
+    columns:
+      - name: posted_at
+        tests: [not_null, unique]
+      - name: post_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["stock_single", "stock_thread", "flow"]
+
+  - name: stg_metrics_monthly
+    description: Typed, trimmed view over raw.metrics_monthly.
+    columns:
+      - name: month
+        tests: [not_null, unique]
+
+  - name: stg_lessons
+    description: Typed, trimmed view over raw.lessons.
+    columns:
+      - name: lesson_id
+        tests: [not_null, unique]
+      - name: status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["active", "archived"]
+
+  - name: stg_session_stats
+    description: Typed, trimmed view over raw.session_stats.
+    columns:
+      - name: stat_date
+        tests: [not_null, unique]
+
+  - name: stg_kpi_snapshots
+    description: Typed, trimmed view over raw.kpi_snapshots.
+    columns:
+      - name: snapshot_date
+        tests: [not_null, unique]
+
+  - name: stg_load_runs
+    description: Typed, trimmed view over raw.load_runs.
+    columns:
+      - name: run_at
+        tests: [not_null]
+      - name: source
+        tests: [not_null]
+    tests:
+      - unique_combination_of_columns:
+          arguments:
+            combination_of_columns: ["run_at", "source"]

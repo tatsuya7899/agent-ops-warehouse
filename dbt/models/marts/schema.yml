@@ -1,0 +1,43 @@
+version: 2
+
+models:
+  - name: mart_ship_velocity
+    description: >
+      Monthly Ship count proxy: article count + commit count + X-post count,
+      one row per calendar month (union of all three sources' active months).
+    columns:
+      - name: month
+        tests: [not_null, unique]
+      - name: article_count
+        tests: [not_null]
+      - name: commit_count
+        tests: [not_null]
+      - name: x_post_count
+        tests: [not_null]
+      - name: ship_velocity_total
+        tests: [not_null]
+
+  - name: mart_kpi_history
+    description: Time series over raw.kpi_snapshots (one row per snapshot date).
+    columns:
+      - name: snapshot_date
+        tests: [not_null, unique]
+
+  - name: mart_agent_activity
+    description: Weekly rollup of session_stats (week starting Monday, UTC).
+    columns:
+      - name: week_start
+        tests: [not_null, unique]
+      - name: session_count
+        tests: [not_null]
+
+  - name: mart_content_leadtime
+    description: >
+      v1 proxy only (SPEC section 3.3 scope-down): no draft-start timestamp is
+      tracked, so this measures the gap between consecutive publish dates
+      (a cadence proxy for lead time), aggregated to monthly grain.
+    columns:
+      - name: month
+        tests: [not_null, unique]
+      - name: articles_published
+        tests: [not_null]

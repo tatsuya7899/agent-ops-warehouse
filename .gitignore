@@ -20,6 +20,14 @@ venv/
 terraform.tfvars
 .terraform/
 
+# dbt (P2) -- profiles.yml is committed intentionally, it holds no secrets
+# (auth is ADC, project id is env_var-injected). Everything below is a
+# regenerable build artifact.
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+dbt/.user.yml
+
 # OS
 .DS_Store
 GOVERNANCE-POINTER.md

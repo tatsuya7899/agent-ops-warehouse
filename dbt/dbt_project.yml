@@ -1,0 +1,24 @@
+name: "agent_ops_warehouse"
+version: "1.0.0"
+config-version: 2
+
+# Matches the profile name in profiles.yml (also in this directory, no secrets:
+# auth is ADC oauth and the project id comes from AOW_PROJECT_ID at run time).
+profile: "agent_ops_warehouse"
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  agent_ops_warehouse:
+    staging:
+      +schema: staging
+      +materialized: view
+    marts:
+      +schema: marts
+      +materialized: view

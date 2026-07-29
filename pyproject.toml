@@ -7,6 +7,16 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=7.4"]
+# P2: dbt Core for staging/marts (dbt/). Pinned exact versions -- dbt moves
+# fast and an unpinned install is not reproducible for fork-and-deploy.
+# NOTE (Python 3.14 only): dbt-core 1.12.0 declares `mashumaro<3.18`, but
+# mashumaro <3.18 fails to import on Python 3.14 (JSONObjectSchema.schema
+# field is not serializable -- a dbt_common/mashumaro bug on very new
+# CPython, unrelated to this project). On Python 3.14, after installing
+# this extra, also run `pip install --upgrade mashumaro` (pip will warn
+# about the version bound above; the newer mashumaro works and the warning
+# is safe to ignore). Python <=3.13 needs no such override.
+dbt = ["dbt-core==1.12.0", "dbt-bigquery==1.12.0"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

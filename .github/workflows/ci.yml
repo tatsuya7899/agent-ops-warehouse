@@ -37,3 +37,24 @@ jobs:
       - uses: terraform-linters/setup-tflint@v4
       - name: tflint
         run: tflint --chdir=.
+
+  dbt:
+    # Parse/compile only -- no BigQuery connection, no ADC available on the
+    # runner. Confirms sources.yml/schema.yml/models are internally
+    # consistent (refs resolve, YAML is valid, custom generic tests compile)
+    # without touching real data.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dbt
+    env:
+      AOW_PROJECT_ID: ci-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dbt
+        run: pip install "dbt-core==1.12.0" "dbt-bigquery==1.12.0"
+      - name: Parse
+        run: dbt parse --profiles-dir .
