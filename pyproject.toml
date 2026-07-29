@@ -2,7 +2,7 @@
 name = "agent-ops-warehouse-loader"
 version = "0.1.0"
 description = "Minimal ETL loader for agent-ops-warehouse. P0 scope: extraction to NDJSON only, no cloud dependencies."
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = []
 
 [project.optional-dependencies]

@@ -72,7 +72,9 @@ ruff check .       # lint
 terraform fmt -check && terraform validate
 ```
 
-CI runs all of the above plus tflint on pushes to `main` and on pull requests.
+CI runs all of the above plus tflint and `dbt parse` on pushes to `main` and on pull requests.
+
+Note: use Python 3.11–3.13 for the venv (dbt-core's `mashumaro` pin breaks on 3.14; if you must use 3.14, `pip install -U mashumaro` after installing dbt).
 
 ## Roadmap
 
