@@ -61,6 +61,9 @@ class TableConfig:
     key_columns: tuple[str, ...]
     all_columns: tuple[str, ...]
     source_uri: str  # local NDJSON path (or GCS URI) to load into staging
+    schema_path: str | None = None  # BQ schema JSON file; required because the
+    # staging table does not exist yet and bq load cannot infer a schema for a
+    # brand-new table without one (verified against the real API, 2026-07-29)
 
 
 @dataclass(frozen=True)
@@ -142,8 +145,7 @@ def build_load_plan(table_configs: list[TableConfig]) -> list[Step]:
                     "dataset": config.dataset,
                     "source_uri": config.source_uri,
                     "write_disposition": "WRITE_TRUNCATE",
-                    "all_columns": config.all_columns,
-                },
+                    "all_columns": config.all_columns, "schema_path": config.schema_path,},
             )
         )
 
@@ -235,6 +237,10 @@ def bq_cli_runner(step: Step) -> StepResult:
             "load",
             "--source_format=NEWLINE_DELIMITED_JSON",
             "--replace",  # staging is WRITE_TRUNCATE: always a full replace
+        ]
+        if step.args.get("schema_path"):
+            cmd.append(f"--schema={step.args['schema_path']}")
+        cmd += [
             f"{project}:{dataset}.{step.table}",
             step.args["source_uri"],
         ]

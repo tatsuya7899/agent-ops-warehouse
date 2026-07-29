@@ -17,6 +17,7 @@ target GCP project -- the P0 sandbox rejects DML outright -- so
 from __future__ import annotations
 
 import argparse
+import pathlib
 from pathlib import Path
 
 from loader.bq_merge import (
@@ -263,6 +264,10 @@ def _run_merge_flag(args: argparse.Namespace, out_dir: Path) -> None:
         key_columns=GIT_COMMITS_KEY_COLUMNS,
         all_columns=GIT_COMMITS_ALL_COLUMNS,
         source_uri=str(out_dir / "raw_git_commits.ndjson"),
+        schema_path=str(
+            pathlib.Path(__file__).resolve().parent.parent
+            / "terraform" / "schemas" / "raw_git_commits.json"
+        ),
     )
     steps = build_load_plan([config])
 
