@@ -45,6 +45,7 @@ resource "google_bigquery_table" "raw" {
   deletion_protection = false # derived data; rebuilt by the loader at will
 }
 
-# P1: budget alert (USD 5, thresholds 50/90/100%). Managed manually in the
-# console first (billing-account IAM friction with user ADC), imported later:
+# P1: budget alert (JPY 1,000 ~= USD 5, thresholds 50/90/100%). Created via
+# `gcloud billing budgets create` first (billing-account IAM friction with
+# user ADC blocks Terraform here), imported later:
 #   terraform import google_billing_budget.guard <budget-id>
