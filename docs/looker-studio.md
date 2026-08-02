@@ -1,36 +1,90 @@
-# Looker Studio dashboard (P2) — build spec
+# Looker Studio dashboard (P2) — assembly sheet
 
-One page, four charts, all reading the `marts` dataset. Looker Studio is free;
-the marts are plain BigQuery views, so the dashboard adds zero cost and zero
-infrastructure — it is configuration, not code, which is why this spec (not a
-binary) is what lives in the repo.
+Division of labor: **the repo builds the components, a human arranges them.**
+Every aggregation, rename, ratio and rounding already happened in the
+`dash_*` views (dbt-tested, 71/71 green) — Looker Studio needs **zero
+calculated fields and zero blends**. Each component below is "pick the
+view, pick the chart type, drop the listed fields into the listed slots".
 
-## Setup (once, ~5 min)
+## 0. Setup (once, ~3 min)
 
-1. Open lookerstudio.google.com → **Create → Report**.
-2. Add data → **BigQuery** → project `agent-ops-warehouse` → dataset `marts`
-   → add each of the four tables below as a data source.
-3. Theme: default. Date fields: BigQuery types map automatically
-   (`month` is a DATE truncated to month; set its granularity to
-   "Year Month" in each chart).
+1. lookerstudio.google.com → **Create → Report** → Add data → **BigQuery**.
+2. Project `agent-ops-warehouse` → dataset `marts` → add these five as
+   separate data sources:
+   `dash_kpi_current` · `dash_ship_velocity` · `dash_kpi_history` ·
+   `dash_agent_activity` · `dash_publish_cadence`
+3. No field editing needed anywhere. All dates are `DATE`; set the
+   display granularity per component as noted.
 
-## Charts (one per mart)
+## 1. Components
 
-| # | Chart | Source | Config |
-|---|---|---|---|
-| 1 | **Ship velocity** — stacked column + line | `mart_ship_velocity` | Dimension `month` (Year Month). Stacked bars: `article_count`, `commit_count`, `x_post_count`. Optional line series: `ship_velocity_total`. This is the north-star proxy over time |
-| 2 | **KPI history** — time series | `mart_kpi_history` | Dimension `snapshot_date`. Metrics: the KPI columns (streak / evidence counters). One snapshot per load, so expect a sparse line that densifies as weekly loads accumulate |
-| 3 | **Agent activity** — column | `mart_agent_activity` | Dimension `week_start` (Year Week). Metric `session_count`. Weekly rollup — content-free by design (counts only, per the privacy boundary) |
-| 4 | **Publishing cadence** — combo | `mart_content_leadtime` | Dimension `month` (Year Month). Bars: `articles_published`. Line: the average publish-gap column (cadence proxy — the README explains why true lead time is out of scope) |
+### C-1. KPI scorecards (top row) — source: `dash_kpi_current`
 
-## Sharing
+One **Scorecard** widget per metric, five in a row. This view always has
+exactly one row (the latest snapshot), so no date filter is needed.
 
-Keep the report private by default. "Anyone with the link can view" is a
-deliberate publish action — treat it like shipping (it goes through the same
-review gate as any public artifact).
+| Tile | Metric field | Format |
+|---|---|---|
+| Publishing streak | `streak_weeks` | number ("weeks" in the tile label) |
+| Evidence done | `evidence_done` | number (label it "of 8" or show target beside it) |
+| Evidence target | `evidence_target` | number (optional — skip if you label the previous tile) |
+| Evidence ratio | `evidence_ratio` | **percent, 0 decimals** |
+| Ships this month | `ships_this_month` | number |
 
-## Why the dashboard itself is not code
+(`publications_last_two_weeks` is available as a sixth tile if the row
+feels sparse; `as_of_date` works as a small "data as of" text tile.)
 
-Looker Studio has no usable IaC surface on the free tier. The reproducible
-part is everything upstream (Terraform + loader + dbt); the dashboard is a
-15-minute manual assembly documented here, which a fork can follow verbatim.
+### C-2. Ship velocity (hero chart) — source: `dash_ship_velocity`
+
+- Chart type: **Combo chart** (stacked bars + line)
+- Dimension: `month` → granularity **Year Month**
+- Bar series (stacked): `articles`, `commits`, `x_posts`
+- Line series (right axis): `total`
+- Sort: `month` ascending
+
+### C-3. KPI history — source: `dash_kpi_history`
+
+- Chart type: **Time series**
+- Dimension: `snapshot_date`
+- Metrics: `streak_weeks`, `evidence_done`
+- Note: one row per weekly load — the line starts sparse and densifies
+  as loads accumulate. That is expected, not a data bug.
+
+### C-4. Agent activity — source: `dash_agent_activity`
+
+- Chart type: **Column chart**
+- Dimension: `week_start` → granularity **ISO Year Week**
+- Metric: `sessions`
+- Sort: `week_start` ascending
+
+### C-5. Publishing cadence — source: `dash_publish_cadence`
+
+- Chart type: **Combo chart**
+- Dimension: `month` → granularity **Year Month**
+- Bars: `articles_published`
+- Line (right axis): `avg_gap_days` (already rounded to 1 decimal;
+  NULL months simply break the line — expected for single-publish months)
+
+## 2. Suggested wireframe (arrange freely — this is the human's half)
+
+```
+┌──────┬──────┬──────┬──────┬──────┐
+│ C-1  │ C-1  │ C-1  │ C-1  │ C-1  │   scorecard row
+├──────┴──────┴──────┴──────┴──────┤
+│            C-2 (hero)            │   ship velocity
+├───────────┬───────────┬──────────┤
+│   C-3     │   C-4     │   C-5    │   history · activity · cadence
+└───────────┴───────────┴──────────┘
+```
+
+## 3. Sharing
+
+Private by default. "Anyone with the link can view" is a publish action —
+it goes through the same review gate as any public artifact.
+
+## 4. Why the dashboard itself is not code
+
+Looker Studio has no usable IaC surface on the free tier. Everything
+upstream is reproducible code (Terraform + loader + dbt + tested views);
+the dashboard is a ~10-minute manual assembly documented here, which a
+fork can follow verbatim.
