@@ -22,3 +22,11 @@ models:
     marts:
       +schema: marts
       +materialized: view
+    dashboard:
+      # No dedicated BigQuery dataset for this layer: it lives inside the
+      # existing Terraform-managed "marts" dataset (see
+      # macros/generate_schema_name.sql) so Looker Studio just picks these
+      # views up alongside the marts they are shaped from. Chart-ready
+      # views only, one model per chart -- no new physical layer.
+      +schema: marts
+      +materialized: view

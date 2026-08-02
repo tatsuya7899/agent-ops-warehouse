@@ -1,0 +1,58 @@
+version: 2
+
+models:
+  - name: dash_ship_velocity
+    description: >
+      Chart-ready copy of mart_ship_velocity for a Looker Studio time-series
+      chart: same rows, columns renamed to plain nouns so no calculated
+      field is needed on the dashboard side.
+    columns:
+      - name: month
+        tests: [not_null, unique]
+      - name: articles
+        tests: [not_null]
+      - name: commits
+        tests: [not_null]
+      - name: x_posts
+        tests: [not_null]
+      - name: total
+        tests: [not_null]
+
+  - name: dash_kpi_current
+    description: >
+      Single-row scorecard: the latest row of mart_kpi_history, with the
+      kpi_c_* columns renamed to the evidence/streak vocabulary CLAUDE.md
+      uses, so each column drops straight onto a Looker Studio number tile.
+    columns:
+      - name: as_of_date
+        tests: [not_null, unique]
+
+  - name: dash_kpi_history
+    description: >
+      Time-series companion to dash_kpi_current: every snapshot, same
+      renamed columns, for trend-line charts.
+    columns:
+      - name: snapshot_date
+        tests: [not_null, unique]
+
+  - name: dash_agent_activity
+    description: >
+      Weekly session count only, chart-ready for a single bar/line series
+      (the other mart_agent_activity counters are left out on purpose --
+      one chart, one number).
+    columns:
+      - name: week_start
+        tests: [not_null, unique]
+      - name: sessions
+        tests: [not_null]
+
+  - name: dash_publish_cadence
+    description: >
+      Monthly publish cadence: article count and the average gap since the
+      previous publish (see mart_content_leadtime for the v1
+      lead-time-proxy caveat this inherits).
+    columns:
+      - name: month
+        tests: [not_null, unique]
+      - name: articles_published
+        tests: [not_null]
