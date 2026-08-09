@@ -22,6 +22,18 @@ models:
     columns:
       - name: snapshot_date
         tests: [not_null, unique]
+      - name: cadence_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['green', 'red']
+      - name: ship_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['green', 'red']
 
   - name: mart_agent_activity
     description: Weekly rollup of session_stats (week starting Monday, UTC).

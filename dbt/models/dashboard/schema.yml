@@ -23,9 +23,24 @@ models:
       Single-row scorecard: the latest row of mart_kpi_history, with the
       kpi_c_* columns renamed to the evidence/streak vocabulary CLAUDE.md
       uses, so each column drops straight onto a Looker Studio number tile.
+      cadence_status/ship_status carry the RAG signal for the two KPIs with
+      a fixed CAREER-KPI threshold (see mart_kpi_history for why KPI-C has
+      none).
     columns:
       - name: as_of_date
         tests: [not_null, unique]
+      - name: cadence_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['green', 'red']
+      - name: ship_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['green', 'red']
 
   - name: dash_kpi_history
     description: >
@@ -34,6 +49,18 @@ models:
     columns:
       - name: snapshot_date
         tests: [not_null, unique]
+      - name: cadence_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['green', 'red']
+      - name: ship_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['green', 'red']
 
   - name: dash_agent_activity
     description: >

@@ -29,10 +29,28 @@ exactly one row (the latest snapshot), so no date filter is needed.
 | Evidence done | `evidence_done` | number (label it "of 8" or show target beside it) |
 | Evidence target | `evidence_target` | number (optional — skip if you label the previous tile) |
 | Evidence ratio | `evidence_ratio` | **percent, 0 decimals** |
-| Ships this month | `ships_this_month` | number |
+| Ships this month | `ships_this_month` | number, **conditional formatting: red/green (see below)** |
 
-(`publications_last_two_weeks` is available as a sixth tile if the row
-feels sparse; `as_of_date` works as a small "data as of" text tile.)
+(`publications_last_two_weeks` is available as a sixth tile — if you add
+it, apply the matching conditional formatting from below. `as_of_date`
+works as a small "data as of" text tile.)
+
+**Conditional formatting (Style tab → Conditional formatting → Add):**
+Looker Studio scorecards can only condition on the tile's own metric
+value, not on a separate field — so `ship_status`/`cadence_status`
+can't be wired in directly as the trigger. Instead, add two rules that
+mirror the same thresholds those columns encode:
+
+- `ships_this_month`: rule "next value or greater, 4" → green; rule
+  "less than, 4" → red (mirrors `ship_status`)
+- `publications_last_two_weeks`: rule "next value or greater, 1" →
+  green; rule "less than, 1" → red (mirrors `cadence_status`)
+
+`ship_status`/`cadence_status` remain in the data source as the single
+computed source for these thresholds (dbt, not Looker) — the rules
+above just restate the same fixed numbers as a native comparison
+because that's the only binding Looker Studio's scorecard supports. See
+`SPEC` "P2-2" for why `evidence_*` intentionally has no such rule.
 
 ### C-2. Ship velocity (hero chart) — source: `dash_ship_velocity`
 
@@ -65,11 +83,21 @@ feels sparse; `as_of_date` works as a small "data as of" text tile.)
 - Line (right axis): `avg_gap_days` (already rounded to 1 decimal;
   NULL months simply break the line — expected for single-publish months)
 
+### C-6. "No target on evidence" note — static text box
+
+Add one text element near the KPI scorecard row (C-1) with a single line
+along these lines: *"Evidence progress has no target shown — its real
+threshold changes monthly and lives outside this dashboard."* This is
+the on-canvas half of SPEC "P2-2" acceptance criterion 3 — don't name
+the internal planning doc here, keep it to that one sentence.
+
 ## 2. Suggested wireframe (arrange freely — this is the human's half)
 
 ```
 ┌──────┬──────┬──────┬──────┬──────┐
 │ C-1  │ C-1  │ C-1  │ C-1  │ C-1  │   scorecard row
+├──────────────────────────────────┤
+│         C-6 (note, small)        │   "no target on evidence" text
 ├──────┴──────┴──────┴──────┴──────┤
 │            C-2 (hero)            │   ship velocity
 ├───────────┬───────────┬──────────┤
@@ -88,3 +116,11 @@ Looker Studio has no usable IaC surface on the free tier. Everything
 upstream is reproducible code (Terraform + loader + dbt + tested views);
 the dashboard is a ~10-minute manual assembly documented here, which a
 fork can follow verbatim.
+
+## 5. What this dashboard is for (and isn't)
+
+This is evidence that the BigQuery + dbt + Looker stack runs, not a
+decision-making instrument. There are no target/pass-fail thresholds
+shown here on purpose — those live in a private planning document and
+change monthly; baking them in here would create two sources of truth.
+See the project SPEC ("P2-2" section) for the accepted-as-done definition.

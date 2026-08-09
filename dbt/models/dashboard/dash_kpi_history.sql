@@ -8,6 +8,8 @@ select
     kpi_c_total as evidence_target,
     kpi_c_rate as evidence_ratio,
     recent_two_week_pubs as publications_last_two_weeks,
-    monthly_ships as ships_this_month
+    cadence_status,
+    monthly_ships as ships_this_month,
+    ship_status
 from {{ ref('mart_kpi_history') }}
 order by snapshot_date
