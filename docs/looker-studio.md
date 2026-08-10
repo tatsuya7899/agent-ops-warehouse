@@ -20,20 +20,26 @@ view, pick the chart type, drop the listed fields into the listed slots".
 
 ### C-1. KPI scorecards (top row) — source: `dash_kpi_current`
 
-One **Scorecard** widget per metric, five in a row. This view always has
+One **Scorecard** widget per metric, six in a row. This view always has
 exactly one row (the latest snapshot), so no date filter is needed.
 
-| Tile | Metric field | Format |
-|---|---|---|
-| Publishing streak | `streak_weeks` | number ("weeks" in the tile label) |
-| Evidence done | `evidence_done` | number (label it "of 8" or show target beside it) |
-| Evidence target | `evidence_target` | number (optional — skip if you label the previous tile) |
-| Evidence ratio | `evidence_ratio` | **percent, 0 decimals** |
-| Ships this month | `ships_this_month` | number, **conditional formatting: red/green (see below)** |
+**Every tile needs a title** (Style tab → Graph title → on, then type
+the text) — a bare field name like `evidence_ratio` doesn't tell a
+first-time viewer what the number means. Also turn off "Show field
+name" under the metric's label settings so the raw column name doesn't
+linger next to the title you just wrote.
 
-(`publications_last_two_weeks` is available as a sixth tile — if you add
-it, apply the matching conditional formatting from below. `as_of_date`
-works as a small "data as of" text tile.)
+| Tile | Metric field | Format | Title (write in the dashboard's own language) |
+|---|---|---|---|
+| Publishing streak | `streak_weeks` | number | "streak, weeks — reference only" |
+| Evidence done | `evidence_done` | number | "evidence completed (G1+G2)" |
+| Evidence target | `evidence_target` | number | "evidence target (G1:4+G2:4)" |
+| Evidence ratio | `evidence_ratio` | **percent, 0 decimals** | "evidence completion rate (%)" |
+| Ships this month | `ships_this_month` | number, **conditional formatting: red/green (see below)** | "Ships this month (target: 4+)" |
+| Publications, last 2 weeks | `publications_last_two_weeks` | number, **conditional formatting: red/green (see below)** | "publications, last 2 weeks (biweekly cadence)" |
+
+`as_of_date` works as a small "data as of" text tile if the row feels
+sparse.
 
 **Conditional formatting (Style tab → Conditional formatting → Add):**
 Looker Studio scorecards can only condition on the tile's own metric
@@ -59,6 +65,8 @@ because that's the only binding Looker Studio's scorecard supports. See
 - Bar series (stacked): `articles`, `commits`, `x_posts`
 - Line series (right axis): `total`
 - Sort: `month` ascending
+- Title: **required** (Style tab → Graph title) — e.g. "monthly Ship
+  velocity: articles + commits + X posts, with total as a line"
 
 ### C-3. KPI history — source: `dash_kpi_history`
 
@@ -67,6 +75,8 @@ because that's the only binding Looker Studio's scorecard supports. See
 - Metrics: `streak_weeks`, `evidence_done`
 - Note: one row per weekly load — the line starts sparse and densifies
   as loads accumulate. That is expected, not a data bug.
+- Title: **required** — e.g. "streak (weeks) and evidence completed
+  over time — two different scales on purpose"
 
 ### C-4. Agent activity — source: `dash_agent_activity`
 
@@ -74,6 +84,7 @@ because that's the only binding Looker Studio's scorecard supports. See
 - Dimension: `week_start` → granularity **ISO Year Week**
 - Metric: `sessions`
 - Sort: `week_start` ascending
+- Title: **required** — e.g. "weekly agent sessions"
 
 ### C-5. Publishing cadence — source: `dash_publish_cadence`
 
@@ -82,28 +93,50 @@ because that's the only binding Looker Studio's scorecard supports. See
 - Bars: `articles_published`
 - Line (right axis): `avg_gap_days` (already rounded to 1 decimal;
   NULL months simply break the line — expected for single-publish months)
+- Title: **required** — e.g. "monthly published articles + average gap
+  since the previous publish"
+
+**Acceptance criterion 2 in the SPEC ("P2-2") requires a title on every
+component above, not just C-1** — a prior pass titled only the
+scorecards and an adversarial review flagged the untitled charts as the
+same "what am I looking at" problem, just relocated. Don't repeat that.
 
 ### C-6. "No target on evidence" note — static text box
 
-Add one text element near the KPI scorecard row (C-1) with a single line
-along these lines: *"Evidence progress has no target shown — its real
-threshold changes monthly and lives outside this dashboard."* This is
-the on-canvas half of SPEC "P2-2" acceptance criterion 3 — don't name
-the internal planning doc here, keep it to that one sentence.
+Add one text element **next to (not overlapping) the evidence-related
+tiles** (evidence done / target / ratio) with a single line explaining
+why they carry no color signal — something to the effect of "evidence
+progress has no target shown here; the real threshold changes monthly
+and lives outside this dashboard." This is the on-canvas half of SPEC
+"P2-2" acceptance criterion 3 — don't name the internal planning doc.
+
+**Write this note in the dashboard's own display language** (see SPEC
+"P2-2" §"画面内注記の言語方針" — as of v1.5 that's Japanese, matching
+the scorecard titles; this English assembly doc stays English since its
+audience is fork builders, not dashboard viewers). Position it close
+enough to the evidence tiles that a viewer's eye catches it before
+wondering why those three tiles are uncolored while ships/publications
+are red or green — a floating note elsewhere on the canvas doesn't
+satisfy this criterion.
 
 ## 2. Suggested wireframe (arrange freely — this is the human's half)
 
 ```
-┌──────┬──────┬──────┬──────┬──────┐
-│ C-1  │ C-1  │ C-1  │ C-1  │ C-1  │   scorecard row
-├──────────────────────────────────┤
-│         C-6 (note, small)        │   "no target on evidence" text
-├──────┴──────┴──────┴──────┴──────┤
-│            C-2 (hero)            │   ship velocity
-├───────────┬───────────┬──────────┤
-│   C-3     │   C-4     │   C-5    │   history · activity · cadence
-└───────────┴───────────┴──────────┘
+┌──────┬──────┬──────┬──────┬──────┬──────┐
+│ C-1  │ C-1  │ C-1  │ C-6  │ C-1  │ C-1  │   evidence 3 tiles + note
+│streak│ done │target│(note)│ratio │ships │   pinned beside them,
+├──────┴──────┴──────┴──────┴──────┴──────┤   ships/pubs tiles carry
+│              (or) C-1: pubs              │   the red/green signal
+├───────────────────────────────────────────┤
+│            C-2 (hero, titled)            │   ship velocity
+├───────────┬───────────┬──────────────────┤
+│  C-3      │  C-4      │  C-5             │   history · activity ·
+│ (titled)  │ (titled)  │ (titled)         │   cadence — all titled
+└───────────┴───────────┴──────────────────┘
 ```
+
+(Exact grid is illustrative — the constraint that matters is C-6 sitting
+next to the evidence tiles, and every chart carrying its own title.)
 
 ## 3. Sharing
 

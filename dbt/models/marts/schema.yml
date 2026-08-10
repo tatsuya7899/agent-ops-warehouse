@@ -27,13 +27,13 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ['green', 'red']
+                values: ['green', 'red', 'unknown']
       - name: ship_status
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['green', 'red']
+                values: ['green', 'red', 'unknown']
 
   - name: mart_agent_activity
     description: Weekly rollup of session_stats (week starting Monday, UTC).

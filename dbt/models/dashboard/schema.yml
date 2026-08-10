@@ -34,13 +34,13 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ['green', 'red']
+                values: ['green', 'red', 'unknown']
       - name: ship_status
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['green', 'red']
+                values: ['green', 'red', 'unknown']
 
   - name: dash_kpi_history
     description: >
@@ -54,13 +54,13 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ['green', 'red']
+                values: ['green', 'red', 'unknown']
       - name: ship_status
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['green', 'red']
+                values: ['green', 'red', 'unknown']
 
   - name: dash_agent_activity
     description: >

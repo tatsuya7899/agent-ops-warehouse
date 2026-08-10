@@ -7,6 +7,9 @@
 -- the single place those thresholds are encoded so Looker Studio never
 -- duplicates the pass/fail logic (SSOT — see SPEC "P2-2").
 --
+-- NULL input (e.g. a partial load) yields 'unknown', not a silent 'red' --
+-- IF() would have collapsed a missing measurement into a false failure.
+--
 -- KPI-C (evidence_done/target/ratio) has no status column here on purpose:
 -- its real threshold is a residual pace (remaining items / months to the
 -- nearest gate deadline), which needs per-gate item counts and deadlines
@@ -20,10 +23,18 @@ select
     safe_divide(kpi_c_achieved, kpi_c_total) as kpi_c_rate,
     streak_weeks,
     recent_two_week_pubs,
-    if(recent_two_week_pubs > 0, 'green', 'red') as cadence_status,
+    case
+        when recent_two_week_pubs is null then 'unknown'
+        when recent_two_week_pubs > 0 then 'green'
+        else 'red'
+    end as cadence_status,
     evidence_ships,
     monthly_ships,
-    if(monthly_ships >= 4, 'green', 'red') as ship_status,
+    case
+        when monthly_ships is null then 'unknown'
+        when monthly_ships >= 4 then 'green'
+        else 'red'
+    end as ship_status,
     loaded_at
 from {{ ref('stg_kpi_snapshots') }}
 order by snapshot_date
