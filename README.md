@@ -2,7 +2,7 @@
 
 Operational telemetry for a one-person AI-agent organization — a BigQuery warehouse, managed entirely by Terraform, running entirely inside GCP's free tier.
 
-I run a small personal studio of AI agents (7 role-defined agents under written governance rules) that ships articles, code, and reviews — separate from the larger agent organization I operate at work. This repository is the instrument panel for that organization: what it commits, what it publishes, what its review gates catch, and what it costs — as queryable tables instead of anecdotes.
+I run a small personal studio of AI agents (7 role-defined agents under written governance rules) that ships articles, code, and reviews — separate from the larger agent organization I operate at work. This repository is the instrument panel for that organization: what it commits, what it publishes, what it learns from failures, and how its KPIs move — as queryable tables instead of anecdotes.
 
 > **Fork-and-deploy**: `terraform apply` + `python -m loader` gives you the same warehouse in *your* GCP project, on the free tier, in minutes. This repo is a template, not just a diary.
 
