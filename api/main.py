@@ -11,6 +11,15 @@ route maps to HTTP 503 (SPEC Section 4.4: "黙って200を返さない"). Every
 test still monkeypatches at a function boundary (embed_question,
 run_vector_search_query, summarize_answer, or execute_query itself) --
 never a real Gemini/BigQuery call in this repo's own test suite.
+
+Phase 3.6 (SPEC Section 9 phase 3.6 / Section 8 risk table -- "課金の数学
+的上限設計") adds two independent spend caps on top of the above: a
+BigQuery-side maximum_bytes_billed hard limit per query
+(run_vector_search_query/build_query_job_config, this file) and an
+application-side daily request-count limit (require_daily_request_limit,
+this file). Neither replaces the other -- the byte cap bounds a single
+query's worst case, the daily limit bounds how many queries can run at
+all in a day.
 """
 from __future__ import annotations
 
@@ -41,6 +50,70 @@ SUMMARY_MODEL = "gemini-2.5-flash"
 # examples: "妥当な最大長(例: 2,000字...)" / "top_kに妥当な上限(例: 20)".
 MAX_QUESTION_LENGTH = 2000
 MAX_TOP_K = 20
+# Phase 3.6 / SPEC Section 9 phase 3.6, Section 8 risk table: a leaked
+# Bearer token has no rate limit that stops BigQuery's brute-force
+# VECTOR_SEARCH from scanning the whole article_chunks table on every
+# request. maximum_bytes_billed makes BigQuery synchronously *reject* (not
+# just warn about) any query whose estimated scan exceeds this many bytes,
+# before it runs -- 100MB is the SPEC's own number; the real table is
+# ~7MB, so this only ever fires for a runaway/malformed query, never a
+# normal one.
+MAXIMUM_BYTES_BILLED = 100 * 1024 * 1024
+
+# Daily request-count cap (Phase 3.6 / SPEC Section 9 phase 3.6, Section 8
+# risk table): maximum_bytes_billed above bounds one query's worst case;
+# this bounds how many such queries can run in a day at all --
+# 100 requests/day x 100MB/query x 30 days = 293GB/month, ~28.6% of
+# BigQuery's 1TiB/month free query tier (SPEC's own math), a hard ceiling
+# even in the worst case (real usage is orders of magnitude below it).
+DAILY_REQUEST_LIMIT_ENV = "DAILY_REQUEST_LIMIT"
+DEFAULT_DAILY_REQUEST_LIMIT = 100
+
+# In-memory, module-level counter keyed by UTC calendar date. This is only
+# a correct rate limiter because Cloud Run will be deployed with
+# max_instance_count=1 (Phase 4, SPEC Section 4.5) -- a single instance
+# means this dict is the *only* counter that will ever exist for the
+# service. If a future change raises max_instance_count above 1, each
+# instance gets its own independent copy of this dict, and the effective
+# daily limit silently becomes DAILY_REQUEST_LIMIT x instance_count rather
+# than DAILY_REQUEST_LIMIT -- an in-memory counter cannot be made correct
+# under multiple instances without moving to a shared store (e.g. a
+# BigQuery/Firestore counter row); don't bump max_instance_count without
+# revisiting this.
+_daily_request_counts: dict[str, int] = {}
+
+
+def _today_utc_key() -> str:
+    """UTC calendar date as a stable dict key (e.g. "2026-08-12"). A
+    function, not an inlined call, so tests can monkeypatch it to move
+    the "day" instead of waiting on (or mocking) a real clock."""
+    from datetime import UTC, datetime
+
+    return datetime.now(UTC).strftime("%Y-%m-%d")
+
+
+def require_daily_request_limit() -> None:
+    """Reject the request with 429 once today's (UTC) request count has
+    reached DAILY_REQUEST_LIMIT (env DAILY_REQUEST_LIMIT_ENV, default
+    DEFAULT_DAILY_REQUEST_LIMIT) -- SPEC Section 9 phase 3.6.
+
+    Design decision (task instruction: record which side of validation
+    this runs on): the /query route calls this *after* question/top_k
+    validation (checkpoint 2's 400s), not before. A structurally invalid
+    request never reaches embed_question/run_vector_search_query -- it
+    costs nothing -- so counting it here too would let a flood of garbage
+    400s burn through the day's budget without ever touching the Gemini/
+    BigQuery pipeline this limit exists to bound, denying legitimate
+    requests for the rest of the day for zero savings. Counting only
+    validated requests keeps this limit's math (100/day x 100MB, SPEC
+    Section 9 phase 3.6) an accurate bound on the costly path specifically.
+    """
+    limit = int(os.environ.get(DAILY_REQUEST_LIMIT_ENV, DEFAULT_DAILY_REQUEST_LIMIT))
+    key = _today_utc_key()
+    count = _daily_request_counts.get(key, 0)
+    if count >= limit:
+        raise HTTPException(status_code=429, detail="daily request limit exceeded")
+    _daily_request_counts[key] = count + 1
 
 
 class QueryRequest(BaseModel):
@@ -139,14 +212,30 @@ def build_bigquery_client():
     return bigquery.Client()
 
 
+def build_query_job_config():
+    """Thin factory around google.cloud.bigquery.QueryJobConfig, lazily
+    imported for the same reason as build_bigquery_client (importing
+    api.main never requires google-cloud-bigquery importable for tests
+    that never reach this function). Kept separate from
+    build_bigquery_client because the byte cap is a per-query setting,
+    not a per-client one (Phase 3.6)."""
+    from google.cloud import bigquery
+
+    return bigquery.QueryJobConfig(maximum_bytes_billed=MAXIMUM_BYTES_BILLED)
+
+
 def run_vector_search_query(sql: str) -> list[dict]:
     """Execute a VECTOR_SEARCH SQL string (from
     api.query.build_vector_search_sql) against BigQuery and return the
     result rows as plain dicts. Any failure -- auth, network, malformed
-    SQL -- is wrapped in RetrievalError."""
+    SQL, or BigQuery's own pre-execution rejection of a query whose
+    estimated scan exceeds maximum_bytes_billed (Phase 3.6) -- is wrapped
+    in RetrievalError; the byte cap needs no special-casing here, it is
+    just one more way this call can fail."""
     try:
         client = build_bigquery_client()
-        query_job = client.query(sql)
+        job_config = build_query_job_config()
+        query_job = client.query(sql, job_config=job_config)
         return [dict(row) for row in query_job.result()]
     except Exception as exc:
         raise RetrievalError(f"BigQuery VECTOR_SEARCH failed: {exc}") from exc
@@ -246,6 +335,10 @@ def query(payload: QueryRequest, _token: str = Depends(require_api_token)) -> Qu
         raise HTTPException(status_code=400, detail="top_k must be a positive integer")
     if payload.top_k > MAX_TOP_K:
         raise HTTPException(status_code=400, detail=f"top_k must be at most {MAX_TOP_K}")
+    # After validation, before execute_query -- see
+    # require_daily_request_limit's docstring for why (a 400 must not
+    # consume the day's budget).
+    require_daily_request_limit()
     try:
         return execute_query(question, payload.top_k, payload.summarize)
     except RetrievalError as exc:

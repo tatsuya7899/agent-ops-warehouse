@@ -25,10 +25,20 @@ dev = ["pytest>=7.4", "httpx2"]
 # is safe to ignore). Python <=3.13 needs no such override.
 dbt = ["dbt-core==1.12.0", "dbt-bigquery==1.12.0"]
 # P3: FastAPI RAG service (api/) -- SPEC-agent-ops-warehouse-rag-api_20260811.md
-# Section 4.4. google-genai/google-cloud-bigquery are already installed via
-# the dbt-bigquery extra above and reused here (Section 3: "既存資産の再利用
-# を優先する"), not re-declared as separate pins.
-api = ["fastapi>=0.115", "uvicorn[standard]>=0.30"]
+# Section 4.4. google-genai is already installed via the dbt-bigquery extra
+# above and reused here (Section 3: "既存資産の再利用を優先する") -- every
+# test that would reach it monkeypatches build_gemini_client, so it is
+# never re-declared as a separate pin.
+# google-cloud-bigquery IS declared explicitly here (Phase 3.6 / SPEC
+# Section 9 phase 3.6): tests/test_api_bigquery_cost_cap.py constructs a
+# real bigquery.QueryJobConfig (a local object, no network call) to verify
+# api.main.build_query_job_config passes the real SDK's maximum_bytes_billed
+# kwarg correctly -- unlike build_bigquery_client's Client()/client.query(),
+# which every test monkeypatches away entirely, this one line of the real
+# SDK does run in the test suite, so it can no longer rely on being merely
+# a transitive dbt-bigquery install (dbt is a separate CI job that does not
+# run the api/ test suite -- see .github/workflows/ci.yml's "python" job).
+api = ["fastapi>=0.115", "uvicorn[standard]>=0.30", "google-cloud-bigquery>=3.0"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
