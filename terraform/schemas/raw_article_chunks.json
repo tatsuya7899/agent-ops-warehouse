@@ -1,0 +1,42 @@
+[
+  {
+    "name": "chunk_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "filename",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "article_title",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "section_title",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "chunk_text",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "embedding",
+    "type": "FLOAT64",
+    "mode": "REPEATED"
+  },
+  {
+    "name": "published_date",
+    "type": "DATE",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "loaded_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED"
+  }
+]

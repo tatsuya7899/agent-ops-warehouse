@@ -76,3 +76,13 @@ models:
       - unique_combination_of_columns:
           arguments:
             combination_of_columns: ["run_at", "source"]
+
+  - name: stg_article_chunks
+    description: Typed, trimmed view over raw.article_chunks.
+    columns:
+      - name: chunk_id
+        tests: [not_null, unique]
+      - name: chunk_text
+        tests: [not_null]
+      - name: embedding
+        tests: [not_null]

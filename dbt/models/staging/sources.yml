@@ -101,3 +101,19 @@ sources:
           - name: rows_loaded
           - name: exclusions_note
             description: What was skipped and why (auditability of the allowlist).
+
+      - name: article_chunks
+        description: >
+          One row per RAG chunk over note-articles/published/ (H2/H3 section
+          units, RAG API SPEC section 4.3). Rebuilt wholesale by
+          scripts/build_embeddings.py (--replace); not incremental.
+        columns:
+          - name: chunk_id
+          - name: filename
+          - name: article_title
+          - name: section_title
+          - name: chunk_text
+          - name: embedding
+            description: gemini-embedding-001 vector (3,072 dims, ARRAY<FLOAT64>).
+          - name: published_date
+          - name: loaded_at

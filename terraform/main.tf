@@ -25,6 +25,7 @@ locals {
     session_stats   = "schemas/raw_session_stats.json"
     kpi_snapshots   = "schemas/raw_kpi_snapshots.json"
     load_runs       = "schemas/raw_load_runs.json"
+    article_chunks  = "schemas/raw_article_chunks.json"
   }
 }
 
