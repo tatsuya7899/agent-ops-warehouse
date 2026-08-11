@@ -30,8 +30,8 @@ def compute_evidence_ship_count(published_dir, today=None):
     return 1
 
 
-def parse_ship_count(text, this_month):
-    return "9"
+def compute_total_ship_count(text, this_month):
+    return 9
 
 
 def find_career_kpi_file():
@@ -55,8 +55,8 @@ def compute_evidence_ship_count(published_dir, today=None):
     return 1
 
 
-def parse_ship_count(text, this_month):
-    return "9"
+def compute_total_ship_count(text, this_month):
+    return 9
 
 
 def find_career_kpi_file():

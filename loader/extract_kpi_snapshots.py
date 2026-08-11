@@ -129,8 +129,7 @@ def _fill_monthly_ships(gs, status_md_path, today, row: dict, reasons: list[str]
         return
     try:
         text = status_path.read_text(encoding="utf-8")
-        count_str = gs.parse_ship_count(text, today.strftime("%Y-%m"))
-        row["monthly_ships"] = int(count_str)
+        row["monthly_ships"] = gs.compute_total_ship_count(text, today.strftime("%Y-%m"))
     except Exception as exc:  # noqa: BLE001
         reasons.append(f"parse_ship_count raised {exc!r}")
 
