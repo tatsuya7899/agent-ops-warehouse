@@ -64,10 +64,30 @@ done
 
 Free-tier envelope: BigQuery sandbox works without a card (tables expire in 60 days). Enabling billing does **not** clear an existing dataset's default expiration — the dataset must be updated (or recreated), which surfaces here as Terraform drift; that is exactly how a checklist item should be encoded.
 
+## RAG API
+
+`POST /query` runs semantic search (BigQuery `VECTOR_SEARCH`, brute-force — see "Design decisions" above) over the published-article corpus and returns the top-k matching chunks.
+
+```bash
+curl -X POST "$RAG_API_URL/query" \
+  -H "Authorization: Bearer $RAG_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "your question", "top_k": 5}'
+
+# or, the thin CLI wrapper (same env vars, pretty-printed with jq):
+scripts/query_articles.sh "your question"
+```
+
+`GET /health` is unauthenticated and returns `{"status": "ok"}`.
+
+**⚠️ Two separate GCP projects, on purpose.** Enabling billing on a GCP project makes that project's Gemini API key (the `ai.google.dev`-issued kind) *lose* its free tier — unlike BigQuery/Cloud Run, which keep their free tier after billing is enabled. This warehouse project has billing enabled (needed to lift BigQuery's 60-day sandbox table expiry), so `GEMINI_API_KEY` is deliberately issued from a **second, billing-disabled** GCP project and injected via Secret Manager. Reusing this warehouse project's own key would silently forfeit the Gemini free tier.
+
+Cost is bounded, not just "should be free": every query has BigQuery's `maximum_bytes_billed` set to 100 MB (a synchronous, pre-execution hard cap — an oversized scan is rejected before it runs, not billed and refunded after), the service runs `max_instance_count=1`, and an in-memory daily request counter (default 100/day, `DAILY_REQUEST_LIMIT` env var) caps request volume — worst case, about 29% of BigQuery's 1 TiB/month free tier. Real usage (personal-scale, a few requests a month) stays near 0.01% of it.
+
 ## Development
 
 ```bash
-pytest -q          # 46 tests, TDD-first
+pytest -q          # 144 tests, TDD-first
 ruff check .       # lint
 terraform fmt -check && terraform validate
 ```
@@ -78,8 +98,8 @@ Note: use Python 3.11–3.13 for the venv (dbt-core's `mashumaro` pin breaks on 
 
 ## Roadmap
 
-- **P2**: dbt Core for staging/marts (tests as data acceptance gates, generated lineage docs), Looker Studio dashboards
-- **P3**: FastAPI + Cloud Run RAG over the published-article corpus (Gemini free tier, Bearer auth)
+- **P2**: dbt Core for staging/marts (tests as data acceptance gates, generated lineage docs), Looker Studio dashboards — done
+- **P3**: FastAPI + Cloud Run RAG over the published-article corpus (Gemini free tier, Bearer auth) — done, see "RAG API" above
 
 ## Built in public
 

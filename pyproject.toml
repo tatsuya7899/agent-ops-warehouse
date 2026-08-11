@@ -25,10 +25,22 @@ dev = ["pytest>=7.4", "httpx2"]
 # is safe to ignore). Python <=3.13 needs no such override.
 dbt = ["dbt-core==1.12.0", "dbt-bigquery==1.12.0"]
 # P3: FastAPI RAG service (api/) -- SPEC-agent-ops-warehouse-rag-api_20260811.md
-# Section 4.4. google-genai is already installed via the dbt-bigquery extra
-# above and reused here (Section 3: "既存資産の再利用を優先する") -- every
-# test that would reach it monkeypatches build_gemini_client, so it is
-# never re-declared as a separate pin.
+# Section 4.4 / 4.5. In this repo's own test suite, every test that would
+# reach google-genai monkeypatches build_gemini_client, so google-genai's
+# absence never surfaces in `pytest`. It is declared here explicitly
+# because the Cloud Run deployment (Section 4.5, terraform/cloud_run.tf)
+# is real production traffic, not a test double: api/main.py's
+# embed_question()/summarize_answer() call
+# scripts.build_embeddings.build_gemini_client(), which does
+# `from google import genai` at request time. Before this line was added
+# (found while writing the Dockerfile, 2026-08-12), google-genai was only
+# ever present transitively via the separate `dbt` extra
+# (dbt-bigquery -> google-cloud-aiplatform -> google-genai) -- an extra
+# the Cloud Run image never installs -- so every real /query request would
+# have 503'd on ImportError while /health kept returning 200 (the exact
+# "既存資産の再利用を優先する" quote below described where the *client
+# factory function* is reused from, not where the *package* would come
+# from at runtime; those turned out to be two different things).
 # google-cloud-bigquery IS declared explicitly here (Phase 3.6 / SPEC
 # Section 9 phase 3.6): tests/test_api_bigquery_cost_cap.py constructs a
 # real bigquery.QueryJobConfig (a local object, no network call) to verify
@@ -38,7 +50,12 @@ dbt = ["dbt-core==1.12.0", "dbt-bigquery==1.12.0"]
 # SDK does run in the test suite, so it can no longer rely on being merely
 # a transitive dbt-bigquery install (dbt is a separate CI job that does not
 # run the api/ test suite -- see .github/workflows/ci.yml's "python" job).
-api = ["fastapi>=0.115", "uvicorn[standard]>=0.30", "google-cloud-bigquery>=3.0"]
+api = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "google-cloud-bigquery>=3.0",
+    "google-genai>=1.0",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
