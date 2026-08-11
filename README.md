@@ -12,18 +12,36 @@ People increasingly run AI-agent setups, but almost nobody *measures* them. DevO
 
 ## Architecture
 
+```mermaid
+flowchart TB
+    subgraph local["Local machine (system of record)"]
+        src["git history · Markdown<br/>publishing logs · KPIs<br/>session aggregates"]
+    end
+
+    subgraph keyProj["GCP project #2 (billing DISABLED)"]
+        geminiKey["Gemini API key<br/>(keeps the free tier)"]
+    end
+
+    subgraph whProj["GCP project #1: the warehouse (billing enabled)"]
+        subgraph bq["BigQuery — raw to staging to marts<br/>(all Terraform-managed)"]
+            tables["telemetry tables"]
+            chunks["article_chunks<br/>(embeddings)"]
+        end
+        looker["Looker Studio"]
+        subgraph cr["Cloud Run: FastAPI RAG (P3, min=0/max=1)"]
+            api["GET /health<br/>POST /query (Bearer auth)"]
+        end
+    end
+
+    src -- "weekly, human-initiated<br/>(loader, free)" --> tables
+    tables --> looker
+    src -- "manual, on publish<br/>(build_embeddings.py)" --> geminiKey
+    geminiKey --> chunks
+    api -- "VECTOR_SEARCH<br/>(brute force, cost-capped)" --> chunks
+    api -- "embed question" --> geminiKey
 ```
-Local machine (system of record)              GCP (derived, private)
-┌──────────────────────────┐   manual      ┌─────────────────────────────┐
-│ git history · Markdown    │  batch load   │ BigQuery                    │
-│ publishing logs · KPIs    │──────────────▶│  raw → staging → marts      │──▶ Looker Studio
-│ session aggregates        │   (free)      │  (all Terraform-managed)    │
-└──────────────────────────┘               └──────────┬──────────────────┘
-        ▲                                             │ VECTOR_SEARCH (brute force)
-   weekly trigger,                          ┌─────────▼─────────────────┐
-   human-initiated                          │ Cloud Run: FastAPI (P3)   │◀── Gemini API (free tier)
-                                            └───────────────────────────┘
-```
+
+Two GCP projects, deliberately: enabling billing on a project makes its Gemini API key *lose* the free tier (BigQuery/Cloud Run keep theirs). The warehouse project has billing on (needed past BigQuery's 60-day sandbox limit), so the Gemini key lives in a second, billing-disabled project instead. Details in the [RAG API](#rag-api) section below.
 
 Design decisions worth stealing (or arguing with):
 
