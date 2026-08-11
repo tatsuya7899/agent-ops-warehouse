@@ -14,13 +14,18 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install test dependencies
-        # google-cloud-bigquery (Phase 3.6 / SPEC Section 9 phase 3.6):
-        # tests/test_api_bigquery_cost_cap.py constructs a real
-        # bigquery.QueryJobConfig (local object, no network call) to check
-        # api.main passes the real SDK's maximum_bytes_billed kwarg --
-        # previously this package was only ever imported inside functions
-        # every test monkeypatched away, so CI never needed it installed.
-        run: pip install pytest ruff fastapi "uvicorn[standard]" httpx2 google-cloud-bigquery
+        # Install from pyproject.toml's own [dev]+[api] extras instead of
+        # hand-listing packages here -- the hand-listed version drifted out
+        # of sync with actual runtime imports three separate times (Phase 3:
+        # fastapi/uvicorn/httpx2 missing; Phase 3.6: google-cloud-bigquery
+        # missing; Phase 4: google-genai missing, caught only when CI failed
+        # on a push already believed green because `pytest`/`ruff` had been
+        # re-run locally -- against the *old* venv, which still had the
+        # stale transitive install). `pip install -e .` needs the explicit
+        # [tool.setuptools] packages list added in this same commit --
+        # without it, setuptools' flat-layout auto-discovery refuses to
+        # build (ambiguous top-level dirs: out/, dbt/, terraform/, ...).
+        run: pip install ruff && pip install -e ".[dev,api]"
       - name: Lint
         run: ruff check loader/ scripts/ api/ tests/
       - name: Test
