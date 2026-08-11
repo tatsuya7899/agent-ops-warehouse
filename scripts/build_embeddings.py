@@ -24,7 +24,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from loader.emit import stamp_loaded_at, write_ndjson
+from loader.emit import build_load_run, stamp_loaded_at, write_ndjson
 from loader.extract_articles import FILENAME_PATTERN, TITLE_PATTERN
 
 logger = logging.getLogger(__name__)
@@ -117,7 +117,18 @@ def split_long_text(text: str, max_chars: int = MAX_CHUNK_CHARS) -> list[str]:
     """Re-split text over max_chars at paragraph boundaries (SPEC Section
     4.1). Paragraphs are packed greedily so no group exceeds max_chars
     unless a single paragraph alone already does -- a paragraph is never
-    cut mid-sentence."""
+    cut mid-sentence.
+
+    Explicit accepted behavior (Phase 3.5 / Plan agent review, SPEC Section
+    9 phase 3.5): a single paragraph with no blank-line break that is
+    itself over max_chars has no safe cut point within this function
+    (splitting mid-sentence would defeat the point of paragraph-boundary
+    re-splitting), so it is returned as one oversized group rather than
+    silently truncated or dropped. A warning is logged so this is visible
+    to an operator instead of only showing up as a slightly-larger-than-
+    expected chunk in raw.article_chunks. Not observed in the real
+    19-article corpus today (SPEC Section 4.1) -- this is the safety net
+    for future articles."""
     if len(text) <= max_chars:
         return [text]
 
@@ -127,6 +138,15 @@ def split_long_text(text: str, max_chars: int = MAX_CHUNK_CHARS) -> list[str]:
     current_len = 0
     for para in paragraphs:
         para_len = len(para)
+        if para_len > max_chars:
+            logger.warning(
+                "split_long_text: a single paragraph (%d chars) exceeds "
+                "max_chars=%d with no blank-line break to split on; kept as "
+                "one oversized chunk (accepted safety-valve behavior, SPEC "
+                "Section 4.1)",
+                para_len,
+                max_chars,
+            )
         if current and current_len + 2 + para_len > max_chars:
             groups.append("\n\n".join(current))
             current, current_len = [], 0
@@ -248,15 +268,31 @@ def build_gemini_client(api_key: str):
     return genai.Client(api_key=api_key)
 
 
-def call_embedding_api(client, text: str, model: str = EMBEDDING_MODEL) -> list[float]:
+def call_embedding_api(
+    client,
+    text: str,
+    model: str = EMBEDDING_MODEL,
+    task_type: str | None = None,
+) -> list[float]:
     """One real call to the Gemini embedding API -- no retry logic here.
     embed_chunk_with_retry owns the retry loop, so tests mock this single
     call directly instead of reimplementing backoff (SPEC Section 4.2 /
-    Section 6-2)."""
-    from google.genai import errors
+    Section 6-2).
 
+    task_type (Phase 3.5 / Plan agent review, SPEC Section 9 phase 3.5):
+    the Gemini embedding API optimizes the vector differently depending on
+    whether the text being embedded is a document to be indexed
+    ("RETRIEVAL_DOCUMENT", passed by build_embeddings' indexing side) or a
+    search query ("RETRIEVAL_QUERY", passed by api.main.embed_question) --
+    leaving this unset (the pre-Phase-3.5 default) silently degrades
+    retrieval quality without erroring. None (the default here) omits the
+    config entirely, matching pre-Phase-3.5 behavior for any caller that
+    does not yet pass a task_type."""
+    from google.genai import errors, types
+
+    config = types.EmbedContentConfig(task_type=task_type) if task_type else None
     try:
-        response = client.models.embed_content(model=model, contents=text)
+        response = client.models.embed_content(model=model, contents=text, config=config)
     except errors.APIError as exc:
         if getattr(exc, "code", None) == 429:
             raise RateLimitError(str(exc)) from exc
@@ -438,7 +474,9 @@ def main(argv: list[str] | None = None) -> list[dict]:
     client = build_gemini_client(api_key)
 
     def embed_fn(text: str) -> list[float]:
-        return call_embedding_api(client, text)
+        # RETRIEVAL_DOCUMENT: the indexing side (SPEC Section 9 phase 3.5;
+        # api.main.embed_question is the RETRIEVAL_QUERY counterpart).
+        return call_embedding_api(client, text, task_type="RETRIEVAL_DOCUMENT")
 
     embedded_rows, skipped_ids = embed_chunks(result.rows, embed_fn)
 
@@ -461,6 +499,25 @@ def main(argv: list[str] | None = None) -> list[dict]:
     )
     logger.info("bq load command (not executed): %s", " ".join(bq_args))
     print(" ".join(bq_args))
+
+    # raw.load_runs audit trail (Phase 3.5 / SPEC Section 8 risk table:
+    # "埋め込みロード時の欠落...がログにしか残らず、BigQuery上で追跡でき
+    # ない"). Mirrors loader.__main__.run()'s build_load_run(source,
+    # rows_loaded, note) + write_ndjson(..., "raw_load_runs.ndjson")
+    # pattern -- reused, not reimplemented (SPEC Section 3). Both skip
+    # categories are named explicitly by count so an operator (or a future
+    # dashboard over raw.load_runs) does not have to go back to the log
+    # output to know what was excluded.
+    skipped_files_note = ", ".join(result.skipped_files) if result.skipped_files else "none"
+    skipped_ids_note = ", ".join(skipped_ids) if skipped_ids else "none"
+    note = (
+        f"skipped_files={len(result.skipped_files)} (filename-convention "
+        f"violations: {skipped_files_note}); "
+        f"skipped_ids={len(skipped_ids)} (429 retry exhausted: {skipped_ids_note})"
+    )
+    load_run = build_load_run("raw_article_chunks", n, note)
+    write_ndjson([load_run], Path(args.out) / "raw_load_runs.ndjson")
+
     return rows
 
 

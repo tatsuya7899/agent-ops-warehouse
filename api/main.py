@@ -34,6 +34,13 @@ DEFAULT_BQ_DATASET = "raw"
 # tests -- summarize_answer is always monkeypatched (task constraint: no
 # real Gemini API call anywhere in the test suite).
 SUMMARY_MODEL = "gemini-2.5-flash"
+# Bounds (Phase 3.5 / SPEC Section 8 risk table: a leaked single Bearer
+# token has no rate limit today, so an unbounded question/top_k is a
+# self-DoS vector against the Gemini free-tier RPM/day limit and BigQuery's
+# free query tier; SPEC Section 9 phase 3.5). Values match the SPEC's own
+# examples: "妥当な最大長(例: 2,000字...)" / "top_kに妥当な上限(例: 20)".
+MAX_QUESTION_LENGTH = 2000
+MAX_TOP_K = 20
 
 
 class QueryRequest(BaseModel):
@@ -64,8 +71,14 @@ def require_api_token(authorization: str | None = Header(default=None)) -> str:
     An unset API_TOKEN rejects every request rather than silently
     accepting any token or crashing -- "黙って200を返さない" (SPEC Section
     4.4) applies to misconfiguration too, not just bad input.
+
+    .strip() on the expected side (Phase 3.5 / SPEC Section 9 phase 3.5:
+    "Secret Manager登録時の空白混入事故対策") -- the Bearer header side
+    already stripped (`token = ...strip()` below); a Secret Manager value
+    saved with a stray trailing newline/leading space previously rejected
+    every otherwise-correct request with no way to tell why.
     """
-    expected = os.environ.get("API_TOKEN")
+    expected = (os.environ.get("API_TOKEN") or "").strip()
     if authorization is None or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="missing bearer token")
     token = authorization.removeprefix("Bearer ").strip()
@@ -101,7 +114,10 @@ def embed_question(question: str) -> list[float]:
         raise RetrievalError(f"{GEMINI_API_KEY_ENV} is not set")
     try:
         client = build_gemini_client(api_key)
-        return call_embedding_api(client, question)
+        # RETRIEVAL_QUERY: the query side (SPEC Section 9 phase 3.5;
+        # scripts.build_embeddings' embed_fn is the RETRIEVAL_DOCUMENT
+        # counterpart on the indexing side).
+        return call_embedding_api(client, question, task_type="RETRIEVAL_QUERY")
     except Exception as exc:
         # Deliberately broad: every embedding-call failure (network, auth,
         # quota, a raw RateLimitError bubbling up because this single call
@@ -221,8 +237,15 @@ def query(payload: QueryRequest, _token: str = Depends(require_api_token)) -> Qu
     question = payload.question.strip()
     if not question:
         raise HTTPException(status_code=400, detail="question must not be empty")
+    if len(question) > MAX_QUESTION_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"question must be at most {MAX_QUESTION_LENGTH} characters",
+        )
     if payload.top_k <= 0:
         raise HTTPException(status_code=400, detail="top_k must be a positive integer")
+    if payload.top_k > MAX_TOP_K:
+        raise HTTPException(status_code=400, detail=f"top_k must be at most {MAX_TOP_K}")
     try:
         return execute_query(question, payload.top_k, payload.summarize)
     except RetrievalError as exc:

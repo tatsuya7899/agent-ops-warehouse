@@ -223,6 +223,34 @@ def test_summarize_true_with_no_results_skips_summarize_answer_call(monkeypatch)
     assert response.answer is None
 
 
+# ---------------------------------------------------------------------------
+# embed_question task_type (Phase 3.5 / Plan agent review, SPEC Section 9
+# phase 3.5): the query side must pass task_type="RETRIEVAL_QUERY" to
+# call_embedding_api -- distinct from build_embeddings' RETRIEVAL_DOCUMENT
+# on the indexing side. build_gemini_client/call_embedding_api are
+# monkeypatched at the api.main import site; no real Gemini call.
+# ---------------------------------------------------------------------------
+
+
+def test_embed_question_calls_call_embedding_api_with_retrieval_query_task_type(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key-for-test-only")
+    monkeypatch.setattr(main, "build_gemini_client", lambda api_key: object())
+    captured: dict = {}
+
+    def fake_call_embedding_api(client, text, task_type=None):
+        captured["text"] = text
+        captured["task_type"] = task_type
+        return [0.1, 0.2]
+
+    monkeypatch.setattr(main, "call_embedding_api", fake_call_embedding_api)
+
+    vector = main.embed_question("質問文")
+
+    assert vector == [0.1, 0.2]
+    assert captured["text"] == "質問文"
+    assert captured["task_type"] == "RETRIEVAL_QUERY"
+
+
 def test_summarize_failure_wraps_in_retrieval_error(monkeypatch):
     monkeypatch.setattr(main, "embed_question", lambda question: [0.1])
     monkeypatch.setattr(

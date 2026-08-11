@@ -154,7 +154,7 @@ def test_main_end_to_end_writes_ndjson_and_prints_bq_load_command(tmp_path, monk
     monkeypatch.setattr(
         build_embeddings,
         "call_embedding_api",
-        lambda client, text, model=build_embeddings.EMBEDDING_MODEL: [0.1, 0.2],
+        lambda client, text, model=build_embeddings.EMBEDDING_MODEL, task_type=None: [0.1, 0.2],
     )
 
     rows = build_embeddings.main(
@@ -218,7 +218,7 @@ def test_main_skips_chunk_that_fails_embedding_and_still_writes_the_rest(tmp_pat
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key-for-test-only")
     monkeypatch.setattr(build_embeddings, "build_gemini_client", lambda api_key: object())
 
-    def fake_call(client, text, model=build_embeddings.EMBEDDING_MODEL):
+    def fake_call(client, text, model=build_embeddings.EMBEDDING_MODEL, task_type=None):
         if "一番目" in text:
             raise build_embeddings.RateLimitError("429")
         return [0.5]
@@ -232,3 +232,65 @@ def test_main_skips_chunk_that_fails_embedding_and_still_writes_the_rest(tmp_pat
 
     assert len(rows) == 1  # the "一番目" chunk was skipped after exhausting retries
     assert rows[0]["section_title"] == "二番目"
+
+
+# ---------------------------------------------------------------------------
+# raw.load_runs recording (Phase 3.5 / SPEC Section 9 phase 3.5, Section 8
+# risk table: "埋め込みロード時の欠落...がログにしか残らず、BigQuery上で
+# 追跡できない"). main() must call loader.emit.build_load_run and write
+# raw_load_runs.ndjson, mirroring loader.__main__.run()'s pattern, with a
+# note that names both skip categories (filename-convention violations,
+# 429-retry-exhausted chunks) by count.
+# ---------------------------------------------------------------------------
+
+
+def test_main_writes_raw_load_runs_ndjson_with_skip_counts(tmp_path, monkeypatch):
+    published_dir = tmp_path / "published"
+    published_dir.mkdir()
+    (published_dir / "20260701_a.md").write_text(
+        "# 記事A\n\n## 一番目\n\n本文1。\n\n## 二番目\n\n本文2。\n", encoding="utf-8"
+    )
+    (published_dir / "no-date-prefix.md").write_text(
+        "# 無題\n\n## X\n\n本文。\n", encoding="utf-8"
+    )
+    out_dir = tmp_path / "out"
+
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key-for-test-only")
+    monkeypatch.setattr(build_embeddings, "build_gemini_client", lambda api_key: object())
+
+    def fake_call(client, text, model=build_embeddings.EMBEDDING_MODEL, task_type=None):
+        if "一番目" in text:
+            raise build_embeddings.RateLimitError("429")
+        return [0.5]
+
+    monkeypatch.setattr(build_embeddings, "call_embedding_api", fake_call)
+    monkeypatch.setattr(build_embeddings.time, "sleep", lambda s: None)
+
+    build_embeddings.main(
+        ["--published-dir", str(published_dir), "--out", str(out_dir), "--project", "p"]
+    )
+
+    load_runs_path = out_dir / "raw_load_runs.ndjson"
+    assert load_runs_path.exists()
+    lines = load_runs_path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    run = json.loads(lines[0])
+    assert run["source"] == "raw_article_chunks"
+    assert run["rows_loaded"] == 1  # "二番目" only -- "一番目" skipped after retries
+    assert "skipped_files=1" in run["exclusions_note"]
+    assert "no-date-prefix.md" in run["exclusions_note"]
+    assert "skipped_ids=1" in run["exclusions_note"]
+    assert "run_at" in run
+
+
+def test_main_dry_run_chunks_does_not_write_raw_load_runs(tmp_path, monkeypatch):
+    published_dir = tmp_path / "published"
+    _write_one_article(published_dir)
+    out_dir = tmp_path / "out"
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    build_embeddings.main(
+        ["--published-dir", str(published_dir), "--out", str(out_dir), "--project", "p", "--dry-run-chunks"]
+    )
+
+    assert not (out_dir / "raw_load_runs.ndjson").exists()

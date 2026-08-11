@@ -76,3 +76,53 @@ def test_valid_question_and_positive_top_k_returns_200():
     )
 
     assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# question max length / top_k upper bound (Phase 3.5 / SPEC Section 8 risk
+# table: single Bearer token + no rate limit -> a leaked token could self-DoS
+# the Gemini free-tier RPM/day limit or BigQuery's free query tier; Section
+# 9 phase 3.5). Bounds mirror the SPEC's own examples: question <= 2000
+# chars, top_k <= 20.
+# ---------------------------------------------------------------------------
+
+
+def test_question_over_max_length_returns_400():
+    response = client.post(
+        "/query",
+        json={"question": "あ" * 2001},
+        headers=AUTH_HEADERS,
+    )
+
+    assert response.status_code == 400
+
+
+def test_question_at_max_length_boundary_returns_200():
+    response = client.post(
+        "/query",
+        json={"question": "あ" * 2000},
+        headers=AUTH_HEADERS,
+    )
+
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize("bad_top_k", [21, 100, 1000])
+def test_top_k_over_max_returns_400(bad_top_k):
+    response = client.post(
+        "/query",
+        json={"question": "何か質問", "top_k": bad_top_k},
+        headers=AUTH_HEADERS,
+    )
+
+    assert response.status_code == 400
+
+
+def test_top_k_at_max_boundary_returns_200():
+    response = client.post(
+        "/query",
+        json={"question": "何か質問", "top_k": 20},
+        headers=AUTH_HEADERS,
+    )
+
+    assert response.status_code == 200

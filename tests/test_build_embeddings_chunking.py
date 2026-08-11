@@ -123,6 +123,35 @@ def test_split_long_text_leaves_short_text_untouched():
     assert groups == [text]
 
 
+def test_split_long_text_single_paragraph_over_max_chars_stays_one_group_with_warning(caplog):
+    """SPEC 4.1 / Phase 3.5 (Plan agent review): a single paragraph with no
+    blank-line break that is itself over MAX_CHUNK_CHARS has nowhere to be
+    cut without breaking mid-sentence, so it is returned as one oversized
+    group -- explicit accepted behavior, not a silent gap -- and a warning
+    is logged so an operator can see it happened (real corpus: 0 occurrences
+    today, SPEC Section 4.1)."""
+    text = "あ" * (MAX_CHUNK_CHARS + 500)  # one paragraph, no "\n\n" anywhere
+
+    with caplog.at_level("WARNING"):
+        groups = split_long_text(text)
+
+    assert groups == [text]  # not silently truncated or dropped
+    assert len(groups[0]) > MAX_CHUNK_CHARS
+    assert "exceeds" in caplog.text or "over" in caplog.text
+
+
+def test_split_long_text_oversized_paragraph_among_normal_ones_still_warns_only_for_it(caplog):
+    normal = "い" * 100
+    oversized = "う" * (MAX_CHUNK_CHARS + 200)
+    text = f"{normal}\n\n{oversized}"
+
+    with caplog.at_level("WARNING"):
+        groups = split_long_text(text)
+
+    assert groups == [normal, oversized]
+    assert caplog.text.count("WARNING") == 1  # only the oversized paragraph triggers it
+
+
 def test_chunk_article_text_applies_long_text_split_to_a_section():
     para_a = "う" * 1500
     para_b = "え" * 1500

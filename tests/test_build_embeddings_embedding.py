@@ -15,6 +15,7 @@ import pytest
 
 from scripts.build_embeddings import (
     RateLimitError,
+    call_embedding_api,
     embed_chunk_with_retry,
     embed_chunks,
 )
@@ -107,3 +108,71 @@ def test_embed_chunks_preserves_original_row_fields():
     assert skipped_ids == []
     assert embedded_rows[0]["section_title"] == "セクション"
     assert embedded_rows[0]["embedding"] == [0.9]
+
+
+# ---------------------------------------------------------------------------
+# call_embedding_api task_type (Phase 3.5 / SPEC Section 9 phase 3.5, Plan
+# agent review): the indexing side must pass task_type="RETRIEVAL_DOCUMENT"
+# so index-time and query-time embeddings are optimized asymmetrically per
+# the Gemini embedding API's documented contract. A fake client (not a real
+# google.genai.Client -- no network call) captures what config object
+# embed_content actually received.
+# ---------------------------------------------------------------------------
+
+
+class _FakeEmbedding:
+    def __init__(self, values: list[float]) -> None:
+        self.values = values
+
+
+class _FakeEmbedContentResponse:
+    def __init__(self, values: list[float]) -> None:
+        self.embeddings = [_FakeEmbedding(values)]
+
+
+class _FakeModels:
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def embed_content(self, *, model, contents, config=None):
+        self.calls.append({"model": model, "contents": contents, "config": config})
+        return _FakeEmbedContentResponse([0.1, 0.2, 0.3])
+
+
+class _FakeGenaiClient:
+    def __init__(self) -> None:
+        self.models = _FakeModels()
+
+
+def test_call_embedding_api_sets_retrieval_document_task_type():
+    from google.genai import types
+
+    client = _FakeGenaiClient()
+
+    vector = call_embedding_api(client, "本文", task_type="RETRIEVAL_DOCUMENT")
+
+    assert vector == [0.1, 0.2, 0.3]
+    assert len(client.models.calls) == 1
+    config = client.models.calls[0]["config"]
+    assert isinstance(config, types.EmbedContentConfig)
+    assert config.task_type == "RETRIEVAL_DOCUMENT"
+
+
+def test_call_embedding_api_sets_retrieval_query_task_type():
+    from google.genai import types
+
+    client = _FakeGenaiClient()
+
+    call_embedding_api(client, "質問文", task_type="RETRIEVAL_QUERY")
+
+    config = client.models.calls[0]["config"]
+    assert isinstance(config, types.EmbedContentConfig)
+    assert config.task_type == "RETRIEVAL_QUERY"
+
+
+def test_call_embedding_api_without_task_type_passes_no_config():
+    client = _FakeGenaiClient()
+
+    call_embedding_api(client, "本文")
+
+    assert client.models.calls[0]["config"] is None
