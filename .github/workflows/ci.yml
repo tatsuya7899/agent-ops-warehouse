@@ -14,9 +14,9 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install test dependencies
-        run: pip install pytest ruff
+        run: pip install pytest ruff fastapi "uvicorn[standard]" httpx2
       - name: Lint
-        run: ruff check loader/ tests/
+        run: ruff check loader/ scripts/ api/ tests/
       - name: Test
         run: pytest -q
 

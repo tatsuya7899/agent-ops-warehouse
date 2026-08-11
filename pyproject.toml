@@ -6,7 +6,14 @@ requires-python = ">=3.11,<3.14"
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=7.4"]
+# httpx2 is required by fastapi.testclient.TestClient / starlette >=1.6 in a
+# clean environment (verified 2026-08-12: fresh venv with only pytest+
+# fastapi+uvicorn installed raises "starlette.testclient module requires the
+# httpx2 package" at collection time). This repo's dev .venv had it masked
+# by an older httpx already present as a transitive google-genai dependency
+# (a deprecation warning, not a hard failure) -- CI has no such transitive
+# install, so httpx2 is declared explicitly rather than relying on that.
+dev = ["pytest>=7.4", "httpx2"]
 # P2: dbt Core for staging/marts (dbt/). Pinned exact versions -- dbt moves
 # fast and an unpinned install is not reproducible for fork-and-deploy.
 # NOTE (Python 3.14 only): dbt-core 1.12.0 declares `mashumaro<3.18`, but
@@ -17,6 +24,11 @@ dev = ["pytest>=7.4"]
 # about the version bound above; the newer mashumaro works and the warning
 # is safe to ignore). Python <=3.13 needs no such override.
 dbt = ["dbt-core==1.12.0", "dbt-bigquery==1.12.0"]
+# P3: FastAPI RAG service (api/) -- SPEC-agent-ops-warehouse-rag-api_20260811.md
+# Section 4.4. google-genai/google-cloud-bigquery are already installed via
+# the dbt-bigquery extra above and reused here (Section 3: "既存資産の再利用
+# を優先する"), not re-declared as separate pins.
+api = ["fastapi>=0.115", "uvicorn[standard]>=0.30"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
