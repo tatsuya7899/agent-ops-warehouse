@@ -67,8 +67,8 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 # Explicit package list -- setuptools' flat-layout auto-discovery treats
-# every top-level directory (out/, dbt/, terraform/, queries/, evidence/,
-# logs/) as an ambiguous package candidate and refuses to build ("Multiple
+# every top-level directory (out/, dbt/, terraform/, reference/) as an
+# ambiguous package candidate and refuses to build ("Multiple
 # top-level packages discovered in a flat-layout"), verified 2026-08-12
 # while writing the Cloud Run Dockerfile and again while fixing CI's
 # dependency-drift bug (three real dependency gaps -- httpx2/fastapi/

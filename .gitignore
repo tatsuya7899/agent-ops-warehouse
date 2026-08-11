@@ -32,5 +32,6 @@ dbt/.user.yml
 .DS_Store
 GOVERNANCE-POINTER.md
 
-# dbt run logs (root-level, generated)
+# dbt run logs, if dbt is ever invoked from the repo root instead of dbt/
+# (dbt's own dbt/logs/ above only covers invocations from inside dbt/)
 logs/
