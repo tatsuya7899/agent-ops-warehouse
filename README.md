@@ -1,5 +1,7 @@
 # agent-ops-warehouse
 
+> 🇯🇵 [日本語版](README.ja.md)(翻訳・このページが正本)
+
 Operational telemetry for a one-person AI-agent organization — a BigQuery warehouse, managed entirely by Terraform, running entirely inside GCP's free tier.
 
 I run a small personal studio of AI agents (7 role-defined agents under written governance rules) that ships articles, code, and reviews. This repository is the instrument panel for that studio: what it commits, what it publishes, what it learns from failures, and how its KPIs move — as queryable tables instead of anecdotes.
