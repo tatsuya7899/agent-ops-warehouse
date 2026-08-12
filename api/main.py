@@ -23,6 +23,7 @@ all in a day.
 """
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 
@@ -32,7 +33,21 @@ from pydantic import BaseModel
 from api.query import build_vector_search_sql
 from scripts.build_embeddings import build_gemini_client, call_embedding_api
 
-app = FastAPI(title="agent-ops-warehouse RAG API")
+logger = logging.getLogger(__name__)
+
+app = FastAPI(
+    title="agent-ops-warehouse RAG API",
+    # shipping-reviewer retroactive audit (2026-08-12): FastAPI's
+    # auto-generated /docs, /redoc, /openapi.json were reachable
+    # unauthenticated (allUsers invoker, no Depends on those routes),
+    # contradicting the README's claim that /health is the only
+    # unauthenticated surface. No secrets leak through them, but the
+    # claim must be true. Disabled rather than gated -- they add no
+    # value to this single-endpoint API.
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 
 GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
 GCP_PROJECT_ENV = "GCP_PROJECT_ID"
@@ -62,24 +77,37 @@ MAXIMUM_BYTES_BILLED = 100 * 1024 * 1024
 
 # Daily request-count cap (Phase 3.6 / SPEC Section 9 phase 3.6, Section 8
 # risk table): maximum_bytes_billed above bounds one query's worst case;
-# this bounds how many such queries can run in a day at all --
-# 100 requests/day x 100MB/query x 30 days = 293GB/month, ~28.6% of
-# BigQuery's 1TiB/month free query tier (SPEC's own math), a hard ceiling
-# even in the worst case (real usage is orders of magnitude below it).
+# this is a *best-effort burst brake* on top of it, not a second guaranteed
+# ceiling -- see the honesty note below. The 293GB/month (~28.6% of
+# BigQuery's 1TiB/month free query tier) figure in the SPEC and README
+# assumes this counter holds for a full day; it is not the load-bearing
+# guarantee. The load-bearing guarantee is MAXIMUM_BYTES_BILLED alone,
+# which is synchronous and per-query, independent of process lifetime.
 DAILY_REQUEST_LIMIT_ENV = "DAILY_REQUEST_LIMIT"
 DEFAULT_DAILY_REQUEST_LIMIT = 100
 
-# In-memory, module-level counter keyed by UTC calendar date. This is only
-# a correct rate limiter because Cloud Run will be deployed with
-# max_instance_count=1 (Phase 4, SPEC Section 4.5) -- a single instance
-# means this dict is the *only* counter that will ever exist for the
-# service. If a future change raises max_instance_count above 1, each
-# instance gets its own independent copy of this dict, and the effective
-# daily limit silently becomes DAILY_REQUEST_LIMIT x instance_count rather
-# than DAILY_REQUEST_LIMIT -- an in-memory counter cannot be made correct
-# under multiple instances without moving to a shared store (e.g. a
-# BigQuery/Firestore counter row); don't bump max_instance_count without
-# revisiting this.
+# In-memory, module-level counter keyed by UTC calendar date.
+#
+# Two separate correctness conditions, both required, only one of which
+# Phase 3.6 originally documented:
+#   1. max_instance_count=1 (Cloud Run, Phase 4, SPEC Section 4.5) -- a
+#      single instance means only one copy of this dict exists at a time.
+#      Raising max_instance_count silently multiplies the effective limit
+#      by instance count. Don't bump it without revisiting this.
+#   2. HONESTY NOTE (found in shipping-reviewer's retroactive audit,
+#      2026-08-12, after the SPEC's original "worst case 293GB/month" math
+#      was already written and published): Cloud Run is also deployed with
+#      min_instance_count=0 (cost -- SPEC Section 4.5). When the service is
+#      idle long enough to scale to zero, this dict is destroyed with the
+#      process; the next request starts a fresh instance with a fresh,
+#      empty dict. A caller who paces requests to ride out cold starts can
+#      reset the count arbitrarily many times per day. This counter is
+#      therefore a burst brake against accidental/naive over-calling, not
+#      a guaranteed daily ceiling -- do not describe it as one in docs.
+#      Making it a true ceiling would need a shared store (BigQuery/
+#      Firestore counter row) or min_instance_count=1 (real cost); neither
+#      is justified by this project's actual traffic, so this limitation
+#      is accepted and documented rather than engineered away.
 _daily_request_counts: dict[str, int] = {}
 
 
@@ -342,4 +370,10 @@ def query(payload: QueryRequest, _token: str = Depends(require_api_token)) -> Qu
     try:
         return execute_query(question, payload.top_k, payload.summarize)
     except RetrievalError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        # shipping-reviewer retroactive audit (2026-08-12): the raw
+        # exception string (e.g. a BigQuery "table not found" error) can
+        # include the fully-qualified project/dataset/table reference.
+        # Log the detail server-side (visible in Cloud Run logs to the
+        # operator) and return a generic message to the caller.
+        logger.warning("retrieval failed: %s", exc)
+        raise HTTPException(status_code=503, detail="retrieval temporarily unavailable") from exc

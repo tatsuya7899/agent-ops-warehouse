@@ -2,9 +2,9 @@
 
 Operational telemetry for a one-person AI-agent organization — a BigQuery warehouse, managed entirely by Terraform, running entirely inside GCP's free tier.
 
-I run a small personal studio of AI agents (7 role-defined agents under written governance rules) that ships articles, code, and reviews — separate from the larger agent organization I operate at work. This repository is the instrument panel for that organization: what it commits, what it publishes, what it learns from failures, and how its KPIs move — as queryable tables instead of anecdotes.
+I run a small personal studio of AI agents (7 role-defined agents under written governance rules) that ships articles, code, and reviews. This repository is the instrument panel for that studio: what it commits, what it publishes, what it learns from failures, and how its KPIs move — as queryable tables instead of anecdotes.
 
-> **Fork-and-deploy**: `terraform apply` + `python -m loader` gives you the same warehouse in *your* GCP project, on the free tier, in minutes. This repo is a template, not just a diary.
+> **Fork-and-deploy**: `terraform apply` + `python -m loader` gives you the same warehouse in *your* GCP project, on the free tier, in minutes. This repo is a template, not just a diary. Note: `loader/extract_git.py`'s `ALLOWED_REPOS` is hardcoded to this author's own repo names — a fork must edit that list first, or the git-history load silently returns zero rows.
 
 ## Why this exists
 
@@ -63,7 +63,7 @@ Design decisions worth stealing (or arguing with):
 
 ## Privacy boundary
 
-Sources are personal repositories and personal logs only. Session telemetry is aggregated locally — counts per day, never content. Commit subjects are loaded for private analysis but never rendered on public surfaces; sample data in tests is synthetic (no real metrics, filenames, or commit subjects). Employer information is excluded by an allowlist you can read in the loader.
+Sources are personal repositories and personal logs only. Git history is scoped by an explicit **allowlist** of personal repositories (`loader/extract_git.py`'s `ALLOWED_REPOS`). Session telemetry is aggregated locally — counts per day, never content — and additionally scoped by the `AOW_EXCLUDED_DIRS` environment variable; **it excludes nothing by default**, so set it yourself if you point `--sessions` at a directory that also holds non-personal session logs. Commit subjects are loaded for private analysis but never rendered on public surfaces; sample data in tests is synthetic (no real metrics, filenames, or commit subjects).
 
 ## Quickstart
 
@@ -96,11 +96,11 @@ curl -X POST "$RAG_API_URL/query" \
 scripts/query_articles.sh "your question"
 ```
 
-`GET /health` is unauthenticated and returns `{"status": "ok"}`.
+`GET /health` is unauthenticated and returns `{"status": "ok"}` — it is the **only** unauthenticated surface; FastAPI's auto-generated `/docs`, `/redoc`, and `/openapi.json` are disabled in this deployment.
 
 **⚠️ Two separate GCP projects, on purpose.** Enabling billing on a GCP project makes that project's Gemini API key (the `ai.google.dev`-issued kind) *lose* its free tier — unlike BigQuery/Cloud Run, which keep their free tier after billing is enabled. This warehouse project has billing enabled (needed to lift BigQuery's 60-day sandbox table expiry), so `GEMINI_API_KEY` is deliberately issued from a **second, billing-disabled** GCP project and injected via Secret Manager. Reusing this warehouse project's own key would silently forfeit the Gemini free tier.
 
-Cost is bounded, not just "should be free": every query has BigQuery's `maximum_bytes_billed` set to 100 MB (a synchronous, pre-execution hard cap — an oversized scan is rejected before it runs, not billed and refunded after), the service runs `max_instance_count=1`, and an in-memory daily request counter (default 100/day, `DAILY_REQUEST_LIMIT` env var) caps request volume — worst case, about 29% of BigQuery's 1 TiB/month free tier. Real usage (personal-scale, a few requests a month) stays near 0.01% of it.
+Cost is bounded, not just "should be free": every query has BigQuery's `maximum_bytes_billed` set to 100 MB (a synchronous, pre-execution hard cap — an oversized scan is rejected before it runs, not billed and refunded after), and the service runs `max_instance_count=1`. On top of that, an in-memory daily request counter (default 100/day, `DAILY_REQUEST_LIMIT` env var) brakes bursts — but honestly: with `min_instance_count=0`, that counter lives inside a process that can scale to zero and back, so it resets on cold start rather than holding for a full UTC day. It is a burst brake against accidental over-calling, not a second guaranteed ceiling. The one load-bearing, guaranteed bound is the 100 MB per-query cap; assuming the daily counter always holds, worst case is about 29% of BigQuery's 1 TiB/month free tier (293GB), but that figure is not a guarantee. Real usage (personal-scale, a few requests a month) stays near 0.01% of the free tier regardless.
 
 ## Development
 
