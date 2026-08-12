@@ -57,7 +57,7 @@ DEFAULT_BQ_DATASET = "raw"
 # summarize=true path (SPEC Section 4.4). Never called in this repo's own
 # tests -- summarize_answer is always monkeypatched (task constraint: no
 # real Gemini API call anywhere in the test suite).
-SUMMARY_MODEL = "gemini-2.5-flash"
+SUMMARY_MODEL = "gemini-3.5-flash"
 # Bounds (Phase 3.5 / SPEC Section 8 risk table: a leaked single Bearer
 # token has no rate limit today, so an unbounded question/top_k is a
 # self-DoS vector against the Gemini free-tier RPM/day limit and BigQuery's

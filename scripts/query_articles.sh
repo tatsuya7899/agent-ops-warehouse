@@ -32,5 +32,5 @@ top_k="${2:-5}"
 curl -sS -X POST "${RAG_API_URL%/}/query" \
   -H "Authorization: Bearer ${RAG_API_TOKEN}" \
   -H "Content-Type: application/json" \
-  -d "$(jq -n --arg q "$question" --argjson k "$top_k" '{question: $q, top_k: $k}')" \
+  -d "$(jq -n --arg q "$question" --argjson k "$top_k" '{question: $q, top_k: $k, summarize: true}')" \
   | jq .
