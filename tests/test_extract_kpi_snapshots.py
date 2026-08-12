@@ -1,7 +1,7 @@
 """Tests for loader.extract_kpi_snapshots.
 
 extract_kpi_snapshots reuses (never reimplements) the KPI functions in
-~/Developer/_ops/generate_status.py (SPEC-agent-ops-warehouse.md Section
+~/Developer/_ops/scripts/generate_status.py (SPEC-agent-ops-warehouse.md Section
 3.1: "generate_status.py の関数群を流用"). All fixtures (CAREER-KPI
 files, published/ dirs, STATUS.md, and the fake generate_status.py
 stubs used to exercise failure paths) are synthetic and created under

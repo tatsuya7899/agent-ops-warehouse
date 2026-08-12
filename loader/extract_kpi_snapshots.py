@@ -1,6 +1,6 @@
 """Extract a single KPI snapshot row (raw_kpi_snapshots) by reusing --
 never reimplementing -- the compute_* functions already implemented in
-~/Developer/_ops/generate_status.py (SPEC-agent-ops-warehouse.md Section
+~/Developer/_ops/scripts/generate_status.py (SPEC-agent-ops-warehouse.md Section
 3.1: "generate_status.py の関数群を流用").
 
 generate_status.py is loaded from an explicit file path via
