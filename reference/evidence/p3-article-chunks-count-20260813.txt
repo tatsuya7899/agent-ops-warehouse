@@ -1,0 +1,21 @@
+P3 evidence — article_chunks corpus size after 20260813 re-embed (2026-08-13)
+
+Command:
+  bq query --use_legacy_sql=false --format=prettyjson \
+    "SELECT COUNT(*) AS total_chunks, COUNT(DISTINCT filename) AS distinct_articles FROM \`agent-ops-warehouse.raw.article_chunks\`"
+
+Output:
+[
+  {
+    "distinct_articles": "20",
+    "total_chunks": "286"
+  }
+]
+
+Context: re-embed triggered by publishing note-articles/published/20260813_*
+(article #20). scripts/build_embeddings.py --dry-run-chunks reports 290 total
+chunks generated from these 20 articles; 286 landed in BigQuery (4 dropped by
+Gemini free-tier rate-limit retries on this run, same reproducible category
+of drop as the earlier 19-article/277-chunk/272-embedded baseline recorded in
+SPEC-agent-ops-warehouse-rag-api_20260811.md Section 9 phase 5). Supersedes
+that baseline as the current corpus-size reference.
