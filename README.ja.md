@@ -126,7 +126,7 @@ CIはmainへのpush・プルリクエストのたびに上記全部+tflint+`dbt 
 
 ## ロードマップ
 
-- **P2(marts・可視化)**: staging/mars向けdbt Core(データ受け入れゲートとしてのテスト・自動生成される系譜ドキュメント)、Looker Studioダッシュボード — 完了
+- **P2(marts・可視化)**: staging/marts向けdbt Core(データ受け入れゲートとしてのテスト・自動生成される系譜ドキュメント)、Looker Studioダッシュボード — 完了
 - **P3(RAG)**: 公開記事コーパスに対するFastAPI + Cloud Run RAG(Geminiの無料枠・Bearer認証) — 完了、詳細は上記「RAG API」節
 
 ## 公開の場での構築
