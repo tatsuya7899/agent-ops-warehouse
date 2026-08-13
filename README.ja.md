@@ -70,7 +70,9 @@ flowchart TB
 ## クイックスタート
 
 ```bash
-# 1. インフラ(gcloud auth application-default loginが必要)
+# 1. インフラ(gcloud auth application-default loginが必要)。
+#    これはBigQuery倉庫のみをデプロイする——RAG API(Cloud Run)は
+#    別枠のオプトインP3拡張(下記「RAG API」参照)。
 cd terraform
 echo 'project_id = "your-project"' > terraform.tfvars
 terraform init && terraform apply
@@ -82,9 +84,15 @@ for t in git_commits articles; do
 done
 ```
 
+上記の`terraform init`はローカルstateを使う(試す分にはこれで十分)。このリポジトリ自体のデプロイはリモートのGCS backendを使っている——同じ構成にしたい場合は`terraform/backend.hcl.example`を`backend.hcl`(gitignore対象・自分のバケット)にコピーし、`terraform init -backend-config=backend.hcl`を実行する。
+
 無料枠の範囲: BigQueryサンドボックスはカード登録なしで使える(テーブルは60日で期限切れ)。課金を有効化しても、既存データセットの既定の有効期限は自動では解除されない——データセットを更新(または再作成)する必要があり、これはここでは意図的にTerraformのドリフトとして表面化させている。これこそチェックリスト項目をコードにエンコードするやり方。
 
+**クリーンなプロジェクトからの再現を確認済み(2026-08-13):** 新規GCPプロジェクト・事前state無しで`terraform init && terraform apply`——倉庫(データセット3・テーブル8)はapply実行時間にして1分未満で立ち上がる。このテストで2件のバグが発覚・修正済み: `rag_api_image`にデフォルト値が無く(まだ必要ないDockerイメージを先にビルド・pushするまで上記Quickstartの素のapplyがブロックされていた)、GCS backendが著者本人の非公開バケットに固定されていた(他の誰にとっても`terraform init`自体がブロックされていた)。
+
 ## RAG API
+
+オプトインのP3拡張であり、上記の基本Quickstartではデプロイされない。まずこのリポジトリルートの`Dockerfile`からイメージをビルド・pushし、`rag_api_image`(`terraform.tfvars`または`-var`)にそのパスを設定して再applyする——`terraform/cloud_run.tf`内のCloud Run/Secret Manager/Artifact Registryの全リソースはこの変数が空でないことをゲート条件にしているため、未設定(既定)のままなら倉庫のみがデプロイされる。
 
 `POST /query`は、公開済み記事コーパスに対して意味検索(BigQueryの`VECTOR_SEARCH`・ブルートフォース——上記「設計判断」参照)を実行し、上位k件の一致チャンクを返す。
 

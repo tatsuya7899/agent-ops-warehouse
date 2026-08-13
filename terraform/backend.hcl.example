@@ -1,0 +1,9 @@
+# Copy to backend.hcl (gitignored) and fill in your own values, then:
+#   terraform init -backend-config=backend.hcl
+#
+# Omit this entirely (skip -backend-config) to use local state instead --
+# fine for trying this out, see versions.tf's comment for why this repo's
+# own deployment uses a remote GCS backend instead.
+
+bucket = "your-tfstate-bucket"
+prefix = "terraform/state"

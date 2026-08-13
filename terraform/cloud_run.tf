@@ -5,6 +5,11 @@
 # are, per the SPEC's own note, "このプロジェクトで前例のない新規カテゴ
 # リ" -- kept in their own file for readability rather than folded into
 # main.tf's existing BigQuery-only shape.
+#
+# Every resource below is `count`-gated on var.rag_api_image being non-empty
+# (2026-08-13, clean-fork reproduction test finding): this is an opt-in P3
+# add-on, not part of the base warehouse a fork gets from the README
+# Quickstart's bare `terraform apply`.
 
 # ---------------------------------------------------------------------------
 # Service account: a dedicated runtime identity for the Cloud Run service,
@@ -14,6 +19,7 @@
 # ---------------------------------------------------------------------------
 
 resource "google_service_account" "rag_api" {
+  count        = var.rag_api_image != "" ? 1 : 0
   account_id   = "rag-api"
   display_name = "RAG API (Cloud Run)"
   # GCP caps service account descriptions at 256 chars -- the fuller
@@ -36,9 +42,10 @@ resource "google_service_account" "rag_api" {
 # lives there -- see main.tf's google_bigquery_table.raw). Not project-wide:
 # this identity has no read access to any other dataset (staging/marts).
 resource "google_bigquery_dataset_iam_member" "rag_api_data_viewer" {
+  count      = var.rag_api_image != "" ? 1 : 0
   dataset_id = google_bigquery_dataset.layers["raw"].dataset_id
   role       = "roles/bigquery.dataViewer"
-  member     = "serviceAccount:${google_service_account.rag_api.email}"
+  member     = "serviceAccount:${google_service_account.rag_api[0].email}"
 }
 
 # roles/bigquery.jobUser: running a BigQuery query job (VECTOR_SEARCH, SPEC
@@ -46,24 +53,27 @@ resource "google_bigquery_dataset_iam_member" "rag_api_data_viewer" {
 # no per-dataset "run a job" grant to narrow this to. Project-scoped here is
 # the correct minimum, not an unscoped default.
 resource "google_project_iam_member" "rag_api_bigquery_job_user" {
+  count   = var.rag_api_image != "" ? 1 : 0
   project = var.project_id
   role    = "roles/bigquery.jobUser"
-  member  = "serviceAccount:${google_service_account.rag_api.email}"
+  member  = "serviceAccount:${google_service_account.rag_api[0].email}"
 }
 
 # roles/secretmanager.secretAccessor, scoped per-secret (not project-wide):
 # this identity can read API_TOKEN and GEMINI_API_KEY specifically, and
 # nothing else that might later live in this project's Secret Manager.
 resource "google_secret_manager_secret_iam_member" "api_token_accessor" {
-  secret_id = google_secret_manager_secret.api_token.secret_id
+  count     = var.rag_api_image != "" ? 1 : 0
+  secret_id = google_secret_manager_secret.api_token[0].secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.rag_api.email}"
+  member    = "serviceAccount:${google_service_account.rag_api[0].email}"
 }
 
 resource "google_secret_manager_secret_iam_member" "gemini_api_key_accessor" {
-  secret_id = google_secret_manager_secret.gemini_api_key.secret_id
+  count     = var.rag_api_image != "" ? 1 : 0
+  secret_id = google_secret_manager_secret.gemini_api_key[0].secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.rag_api.email}"
+  member    = "serviceAccount:${google_service_account.rag_api[0].email}"
 }
 
 # ---------------------------------------------------------------------------
@@ -75,6 +85,7 @@ resource "google_secret_manager_secret_iam_member" "gemini_api_key_accessor" {
 # ---------------------------------------------------------------------------
 
 resource "google_secret_manager_secret" "api_token" {
+  count     = var.rag_api_image != "" ? 1 : 0
   secret_id = "API_TOKEN"
   replication {
     auto {}
@@ -82,6 +93,7 @@ resource "google_secret_manager_secret" "api_token" {
 }
 
 resource "google_secret_manager_secret" "gemini_api_key" {
+  count     = var.rag_api_image != "" ? 1 : 0
   secret_id = "GEMINI_API_KEY"
   replication {
     auto {}
@@ -94,6 +106,7 @@ resource "google_secret_manager_secret" "gemini_api_key" {
 # ---------------------------------------------------------------------------
 
 resource "google_artifact_registry_repository" "rag_api" {
+  count         = var.rag_api_image != "" ? 1 : 0
   repository_id = "rag-api"
   location      = var.run_region
   format        = "DOCKER"
@@ -105,11 +118,12 @@ resource "google_artifact_registry_repository" "rag_api" {
 # ---------------------------------------------------------------------------
 
 resource "google_cloud_run_v2_service" "rag_api" {
+  count    = var.rag_api_image != "" ? 1 : 0
   name     = "rag-api"
   location = var.run_region
 
   template {
-    service_account = google_service_account.rag_api.email
+    service_account = google_service_account.rag_api[0].email
 
     # SPEC Section 4.5 / Section 8 risk table: max_instance_count=1 is not
     # merely a cost cap -- api/main.py's daily request-count limiter
@@ -152,7 +166,7 @@ resource "google_cloud_run_v2_service" "rag_api" {
         name = "API_TOKEN"
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.api_token.secret_id
+            secret  = google_secret_manager_secret.api_token[0].secret_id
             version = "latest"
           }
         }
@@ -162,7 +176,7 @@ resource "google_cloud_run_v2_service" "rag_api" {
         name = "GEMINI_API_KEY"
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.gemini_api_key.secret_id
+            secret  = google_secret_manager_secret.gemini_api_key[0].secret_id
             version = "latest"
           }
         }
@@ -194,8 +208,9 @@ resource "google_cloud_run_v2_service" "rag_api" {
 # allUsers here means "reachable", not "unauthenticated" -- authentication
 # still happens one layer up, inside the app.
 resource "google_cloud_run_v2_service_iam_member" "rag_api_public_invoker" {
-  name     = google_cloud_run_v2_service.rag_api.name
-  location = google_cloud_run_v2_service.rag_api.location
+  count    = var.rag_api_image != "" ? 1 : 0
+  name     = google_cloud_run_v2_service.rag_api[0].name
+  location = google_cloud_run_v2_service.rag_api[0].location
   role     = "roles/run.invoker"
   member   = "allUsers"
 }

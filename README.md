@@ -70,7 +70,9 @@ Sources are personal repositories and personal logs only. Git history is scoped 
 ## Quickstart
 
 ```bash
-# 1. Infrastructure (needs gcloud auth application-default login)
+# 1. Infrastructure (needs gcloud auth application-default login).
+#    This deploys the BigQuery warehouse only -- the RAG API (Cloud Run) is
+#    a separate, opt-in P3 add-on; see "RAG API" below.
 cd terraform
 echo 'project_id = "your-project"' > terraform.tfvars
 terraform init && terraform apply
@@ -82,9 +84,15 @@ for t in git_commits articles; do
 done
 ```
 
+`terraform init` above uses local state (fine for trying this out). This repo's own deployment instead uses a remote GCS backend -- copy `terraform/backend.hcl.example` to `backend.hcl` (gitignored, your own bucket) and run `terraform init -backend-config=backend.hcl` if you want the same.
+
 Free-tier envelope: BigQuery sandbox works without a card (tables expire in 60 days). Enabling billing does **not** clear an existing dataset's default expiration — the dataset must be updated (or recreated), which surfaces here as Terraform drift; that is exactly how a checklist item should be encoded.
 
+**Verified reproducible from a clean project (2026-08-13):** a fresh GCP project, `terraform init && terraform apply`, no prior state — the warehouse (3 datasets, 8 tables) stands up in under a minute of actual `apply` time. Two bugs surfaced and were fixed by this test: `rag_api_image` had no default (blocked the bare Quickstart `apply` above until you'd already built and pushed a Docker image you don't need yet) and the GCS backend was hardcoded to this author's own private bucket (blocked `terraform init` itself for anyone else). Both are what "clean-fork reproduction test" in the project history refers to.
+
 ## RAG API
+
+Opt-in P3 add-on, not deployed by the base Quickstart above. Build and push the image from this repo's root `Dockerfile` first, then set `rag_api_image` (`terraform.tfvars` or `-var`) to that path and re-apply — every Cloud Run/Secret Manager/Artifact Registry resource in `terraform/cloud_run.tf` is gated on this variable being non-empty, so leaving it unset (the default) deploys the warehouse only.
 
 `POST /query` runs semantic search (BigQuery `VECTOR_SEARCH`, brute-force — see "Design decisions" above) over the published-article corpus and returns the top-k matching chunks.
 
