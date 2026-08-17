@@ -469,7 +469,12 @@ def main(argv: list[str] | None = None) -> list[dict]:
 
     api_key = os.environ.get(args.api_key_env)
     if not api_key:
-        raise SystemExit(f"{args.api_key_env} is not set; cannot call the Gemini embedding API.")
+        raise SystemExit(
+            f"{args.api_key_env} is not set; cannot call the Gemini embedding API.\n"
+            "Local runs: the key lives in ~/.config/gemini/env (not exported globally).\n"
+            "  with-gemini .venv/bin/python scripts/build_embeddings.py ...   (zsh helper)\n"
+            "  or: (set -a; . ~/.config/gemini/env; set +a; .venv/bin/python scripts/build_embeddings.py ...)"
+        )
 
     client = build_gemini_client(api_key)
 
