@@ -115,7 +115,7 @@ scripts/query_articles.sh "your question"
 ## 開発
 
 ```bash
-pytest -q          # 144テスト・TDD-first
+pytest -q          # 151テスト・TDD-first
 ruff check .       # lint
 terraform fmt -check && terraform validate
 ```
