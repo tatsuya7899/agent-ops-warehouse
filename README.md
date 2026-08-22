@@ -89,6 +89,7 @@ done
 Free-tier envelope: BigQuery sandbox works without a card, but comes with two restrictions that only matter in combination -- tables expire in 60 days, and DML (row-level writes/updates) is unavailable, so the raw layer is load-only until billing is on. Neither restriction is undocumented on its own; what's undocumented is what happens when both apply at once to the same free-tier deploy. Enabling billing lifts the DML restriction but does **not** clear an existing dataset's default expiration — the dataset must be updated (or recreated), which surfaces here as Terraform drift; that is exactly how a checklist item should be encoded.
 
 **Verified reproducible from a clean project (2026-08-13):** a fresh GCP project, `terraform init && terraform apply`, no prior state — the warehouse (3 datasets, 9 tables) stands up in under a minute of actual `apply` time. Two bugs surfaced and were fixed by this test: `rag_api_image` had no default (blocked the bare Quickstart `apply` above until you'd already built and pushed a Docker image you don't need yet) and the GCS backend was hardcoded to this author's own private bucket (blocked `terraform init` itself for anyone else). Both are what "clean-fork reproduction test" in the project history refers to.
+<!-- VERIFY: count(glob="agent-ops-warehouse/terraform/schemas/raw_*.json") == 9 -->
 
 ## RAG API
 
@@ -107,18 +108,31 @@ scripts/query_articles.sh "your question"
 ```
 
 `GET /health` is unauthenticated and returns `{"status": "ok"}` — it is the **only** unauthenticated surface; FastAPI's auto-generated `/docs`, `/redoc`, and `/openapi.json` are disabled in this deployment.
+<!-- VERIFY: grep_count(pattern="docs_url=None", glob="agent-ops-warehouse/api/main.py") == 1 -->
+<!-- VERIFY: grep_count(pattern="redoc_url=None", glob="agent-ops-warehouse/api/main.py") == 1 -->
+<!-- VERIFY: grep_count(pattern="openapi_url=None", glob="agent-ops-warehouse/api/main.py") == 1 -->
 
 **⚠️ Two separate GCP projects, on purpose.** Enabling billing on a GCP project makes that project's Gemini API key (the `ai.google.dev`-issued kind) *lose* its free tier — unlike BigQuery/Cloud Run, which keep their free tier after billing is enabled. This warehouse project has billing enabled (needed to lift BigQuery's 60-day sandbox table expiry), so `GEMINI_API_KEY` is deliberately issued from a **second, billing-disabled** GCP project and injected via Secret Manager. Reusing this warehouse project's own key would silently forfeit the Gemini free tier.
 
 Cost is bounded, not just "should be free": every query has BigQuery's `maximum_bytes_billed` set to 100 MB (a synchronous, pre-execution hard cap — an oversized scan is rejected before it runs, not billed and refunded after), and the service runs `max_instance_count=1`. On top of that, an in-memory daily request counter (default 100/day, `DAILY_REQUEST_LIMIT` env var) brakes bursts — but honestly: with `min_instance_count=0`, that counter lives inside a process that can scale to zero and back, so it resets on cold start rather than holding for a full UTC day. It is a burst brake against accidental over-calling, not a second guaranteed ceiling. The one load-bearing, guaranteed bound is the 100 MB per-query cap; assuming the daily counter always holds, worst case is about 29% of BigQuery's 1 TiB/month free tier (293GB), but that figure is not a guarantee. Real usage (personal-scale, a few requests a month) stays near 0.01% of the free tier regardless.
+<!-- VERIFY: grep_count(pattern="MAXIMUM_BYTES_BILLED = 100 * 1024 * 1024", glob="agent-ops-warehouse/api/main.py") == 1 -->
+<!-- VERIFY: grep_count(pattern="max_instance_count = 1", glob="agent-ops-warehouse/terraform/cloud_run.tf") == 1 -->
+<!-- VERIFY: grep_count(pattern="min_instance_count = 0", glob="agent-ops-warehouse/terraform/cloud_run.tf") == 1 -->
+<!-- VERIFY: grep_count(pattern="DEFAULT_DAILY_REQUEST_LIMIT = 100", glob="agent-ops-warehouse/api/main.py") == 1 -->
 
 ## Development
 
 ```bash
-pytest -q          # 144 tests, TDD-first
+pytest -q          # 151 tests, TDD-first
 ruff check .       # lint
 terraform fmt -check && terraform validate
 ```
+<!-- VERIFY: grep_count(pattern="def test_", glob="agent-ops-warehouse/tests/test_api_health.py") == 1 -->
+<!-- 上記は「tests/配下にテストファイルが実在し空でない」ことの最小限の存在確認。
+     pytest収集数(151、parametrize展開込み)自体はcount()/grep_count()の
+     ファイル単位の検証では再現できない(2026-08-22実測: raw def数139・
+     pytest --collect-only=151。乖離はparametrizeケース展開分)。数値は
+     pytest実行時の直接確認による(2026-08-22)。 -->
 
 CI runs all of the above plus tflint and `dbt parse` on pushes to `main` and on pull requests.
 
