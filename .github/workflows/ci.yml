@@ -8,6 +8,11 @@ on:
 jobs:
   secret-scan:
     runs-on: ubuntu-latest
+    # 実CI失敗で発覚(2026-09-13): gitleaks-actionはpull_requestイベントで常にPRへ
+    # コメント投稿を試み(README記載の仕様)`pull-requests: write`権限を要求するが、
+    # default_workflow_permissionsが"read"のため必ず失敗する。権限昇格で回避せず
+    # push時のみ実行する
+    if: github.event_name != 'pull_request'
     steps:
       - name: Checkout (full history — gitleaksがgit履歴全体を見るためfetch-depth 0が必要)
         uses: actions/checkout@v4
