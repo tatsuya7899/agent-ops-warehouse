@@ -13,12 +13,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: gitleaks (git履歴全体のシークレットスキャン)
-        # 実CI失敗で発覚(2026-09-13): gitleaks-actionはpull_requestイベントでデフォルト
-        # 有効のPRコメント機能がPR書き込み権限を要求し、default_workflow_permissions=
-        # "read"のこのリポジトリでは失敗する。当初「pull_request時はスキップ」で回避したが、
-        # 公式の`GITLEAKS_ENABLE_COMMENTS=false`で根本対応する(スキップを撤回)。
-        # 合わせてv2→v3へ更新(Node 20が2026-09-16に完全廃止されるため。Dependabotの提案通り)
+      - name: gitleaks (git履歴全体のシークレットスキャン、push時のみ)
+        # 実CI失敗で発覚(2026-09-13): gitleaks-actionはpull_requestイベントで
+        # 「PRのコミット一覧取得」(GET /pulls/{n}/commits)を無条件に行い`pull-requests:
+        # read`を要求する。GITLEAKS_ENABLE_COMMENTS=falseはコメント投稿側は防げるが
+        # このread側の呼び出しは防げないと実機で確認済み。pull_request時はスキップする。
+        # v2→v3化(Node 20が2026-09-16に廃止されるため)とコメント無効化自体は維持する
+        if: github.event_name != 'pull_request'
         uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
