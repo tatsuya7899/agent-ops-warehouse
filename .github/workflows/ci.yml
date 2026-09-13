@@ -47,26 +47,40 @@ jobs:
         # baseline実測(2026-09-13、tests/配下のS101/S108除外後): 19件(S607×10・S603×8・S608×1)。
         # 是正は別タスク
         run: ruff check --select=S loader/ scripts/ api/ tests/ || true
-      - name: Shell Lint (shellcheck、informational・非ブロッキング)
+      - name: Test
+        run: pytest -q
+
+  shell-lint:
+    name: Shell Lint (shellcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck(informational・非ブロッキング)
         # linter段階導入計画 Category 2.4(2026-09-13)。対象1本(scripts/query_articles.sh)。
         # baseline実測(2026-09-13・severity=warning): 0件
         run: |
           sudo apt-get install -y shellcheck -qq
           shellcheck --severity=warning scripts/query_articles.sh || true
-      - name: Test
-        run: pytest -q
 
-      - name: Workflow Lint (actionlint、ブロッキング)
-        # linter段階導入計画 Category 3(2026-09-13)。baseline実測: 0件のためブロッキングで導入
+  lint-workflows:
+    name: Workflow Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: actionlint(ブロッキング — baseline 0件実測 2026-09-13)
+        # 敵対的レビューで指摘(2026-09-13・m-3是正): 従来pythonジョブ末尾に同居させていたため
+        # CI結果画面でactionlint/zizmor由来の失敗かruff/pytest由来かが区別しにくかった。
+        # 他3リポジトリと同じ独立ジョブ構成に揃える
         uses: docker://rhysd/actionlint:1.7.12
         with:
           args: -color
-
-      - name: Workflow Security Lint (zizmor、informational・非ブロッキング)
-        # baseline実測(2026-09-13): 23件(medium9/high9)。是正は別タスク
+      - name: "zizmor(informational・非ブロッキング。baseline実測2026-09-13: 23件medium9/high9)"
         uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
         continue-on-error: true
         with:
+          # 敵対的レビューで指摘(2026-09-13・m-2是正): version未固定だとzizmor自体の
+          # ルール更新でbaseline件数が陳腐化する。CLI版数を固定して再現性を持たせる
+          version: "1.30.1"
           advanced-security: "false"
 
   terraform:
