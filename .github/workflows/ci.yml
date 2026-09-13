@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (full history — gitleaksがgit履歴全体を見るためfetch-depth 0が必要)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: gitleaks (git履歴全体のシークレットスキャン、push時のみ)
@@ -29,7 +29,7 @@ jobs:
   python:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -61,7 +61,7 @@ jobs:
     name: Shell Lint (shellcheck)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: shellcheck(informational・非ブロッキング)
         # linter段階導入計画 Category 2.4(2026-09-13)。対象1本(scripts/query_articles.sh)。
         # baseline実測(2026-09-13・severity=warning): 0件
@@ -73,7 +73,7 @@ jobs:
     name: Workflow Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: actionlint(ブロッキング — baseline 0件実測 2026-09-13)
         # 敵対的レビューで指摘(2026-09-13・m-3是正): 従来pythonジョブ末尾に同居させていたため
         # CI結果画面でactionlint/zizmor由来の失敗かruff/pytest由来かが区別しにくかった。
@@ -96,7 +96,7 @@ jobs:
       run:
         working-directory: terraform
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v3
       - name: Format check
         run: terraform fmt -check -recursive
@@ -120,7 +120,7 @@ jobs:
     env:
       AOW_PROJECT_ID: ci-placeholder
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
