@@ -6,6 +6,19 @@ on:
   pull_request:
 
 jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history — gitleaksがgit履歴全体を見るためfetch-depth 0が必要)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks (git履歴全体のシークレットスキャン)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
   python:
     runs-on: ubuntu-latest
     steps:
@@ -27,9 +40,34 @@ jobs:
         # build (ambiguous top-level dirs: out/, dbt/, terraform/, ...).
         run: pip install ruff && pip install -e ".[dev,api]"
       - name: Lint
-        run: ruff check loader/ scripts/ api/ tests/
+        # linter段階導入計画 Category 4.1(2026-09-13)。従来の暗黙デフォルト(E4/E7/E9/F)は
+        # pyproject.tomlのselectへ明示化した上でここでは従来どおりブロッキングのまま維持する。
+        run: ruff check --select=E4,E7,E9,F loader/ scripts/ api/ tests/
+      - name: Lint (security rules、informational・非ブロッキング)
+        # baseline実測(2026-09-13、tests/配下のS101/S108除外後): 19件(S607×10・S603×8・S608×1)。
+        # 是正は別タスク
+        run: ruff check --select=S loader/ scripts/ api/ tests/ || true
+      - name: Shell Lint (shellcheck、informational・非ブロッキング)
+        # linter段階導入計画 Category 2.4(2026-09-13)。対象1本(scripts/query_articles.sh)。
+        # baseline実測(2026-09-13・severity=warning): 0件
+        run: |
+          sudo apt-get install -y shellcheck -qq
+          shellcheck --severity=warning scripts/query_articles.sh || true
       - name: Test
         run: pytest -q
+
+      - name: Workflow Lint (actionlint、ブロッキング)
+        # linter段階導入計画 Category 3(2026-09-13)。baseline実測: 0件のためブロッキングで導入
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color
+
+      - name: Workflow Security Lint (zizmor、informational・非ブロッキング)
+        # baseline実測(2026-09-13): 23件(medium9/high9)。是正は別タスク
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        continue-on-error: true
+        with:
+          advanced-security: "false"
 
   terraform:
     runs-on: ubuntu-latest

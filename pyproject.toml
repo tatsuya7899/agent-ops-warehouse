@@ -57,6 +57,21 @@ api = [
     "google-genai>=1.0",
 ]
 
+[tool.ruff.lint]
+# linter段階導入計画 Category 4.1(2026-09-13)。従来[tool.ruff]セクション自体が
+# 存在せず、CIの`ruff check`はruffの暗黙デフォルト(E4,E7,E9,F)にたまたま依存していた
+# (grep実測: 明示設定ゼロ)。まずそのデフォルトを明示化し、その上でS(flake8-bandit相当の
+# セキュリティルール)を追加する。
+# baseline実測(2026-09-13): デフォルト4種(E4/E7/E9/F)は0件のまま。S追加後は407件
+# (S101=382件・ほぼ全てtests/配下のassert文)。tests/配下のS101/S108(hardcoded-temp-file)
+# は下記per-file-ignoresで除外(標準的な慣行)。除外後の残り19件(S607×10・S603×8・S608×1、
+# loader/scripts/api/tests配下に分散)は.github/workflows/ci.ymlで非ブロッキング運用とし、
+# 是正は別タスクとする(このタスクの範囲は「設定の導入」であり「指摘の是正」ではない)
+select = ["E4", "E7", "E9", "F", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S108"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]

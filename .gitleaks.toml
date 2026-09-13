@@ -1,0 +1,28 @@
+# agent-ops-warehouse向けgitleaks設定。
+# 2026-09-13新設(linter段階導入計画 Category 1.4)。
+# ~/Developer本体(studio-ops)の.gitleaks.tomlと同じ方針を踏襲するが、
+# `lixil-company-email`ルールはこのリポジトリには不要(会社固有の懸念ではないため)。
+
+title = "agent-ops-warehouse gitleaks config"
+
+[extend]
+# gitleaksの既定ルールセット(汎用APIキー・トークンパターン)をベースに使う
+useDefault = true
+
+[[rules]]
+id = "google-api-key"
+description = "Google APIキー(AIzaSy...形式)"
+regex = '''AIzaSy[A-Za-z0-9_-]{33}'''
+tags = ["api-key", "google"]
+
+[[rules]]
+id = "google-oauth-client-secret"
+description = "Google OAuth Client Secret(GOCSPX-...形式)"
+regex = '''GOCSPX-[A-Za-z0-9_-]{28}'''
+tags = ["oauth", "google"]
+
+[allowlist]
+description = "既知の安全な例外(検知パターンを説明目的で文字列として含むファイル)"
+paths = [
+  '''\.gitleaks\.toml''',
+]
