@@ -3,7 +3,7 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 6.0"
+      version = "~> 8.3"
     }
   }
   # P2-3 (2026-08-12): migrated to a GCS backend (us-central1, Always Free
