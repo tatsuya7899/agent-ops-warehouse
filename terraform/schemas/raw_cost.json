@@ -1,0 +1,45 @@
+[
+  {
+    "name": "stat_date",
+    "type": "DATE",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "model",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Assistant-message model id; null when the transcript record carried none"
+  },
+  {
+    "name": "input_tokens",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "output_tokens",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "cache_creation_input_tokens",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "cache_read_input_tokens",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "cost_usd",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Static list-price estimate; null for models absent from the price table (no fabricated numbers)"
+  },
+  {
+    "name": "loaded_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "Aggregates only; transcript text never leaves the machine"
+  }
+]

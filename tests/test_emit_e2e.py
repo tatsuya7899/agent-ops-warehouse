@@ -253,6 +253,19 @@ def test_cli_end_to_end_all_sources_stamp_loaded_at(tmp_path):
                 "message": {"role": "user", "content": "hi"},
             }
         )
+        + "\n"
+        + json.dumps(
+            {
+                "type": "assistant",
+                "timestamp": "2026-07-29T00:01:00.000Z",
+                "message": {
+                    "role": "assistant",
+                    "model": "claude-sonnet-5",
+                    "content": [],
+                    "usage": {"input_tokens": 10, "output_tokens": 5},
+                },
+            }
+        )
         + "\n",
         encoding="utf-8",
     )
@@ -287,6 +300,7 @@ def test_cli_end_to_end_all_sources_stamp_loaded_at(tmp_path):
         "raw_metrics_monthly.ndjson",
         "raw_x_posts.ndjson",
         "raw_session_stats.ndjson",
+        "raw_cost.ndjson",
         "raw_kpi_snapshots.ndjson",
     ]
     for filename in stamped_files:
@@ -305,6 +319,7 @@ def test_cli_end_to_end_all_sources_stamp_loaded_at(tmp_path):
         "raw_metrics_monthly",
         "raw_x_posts",
         "raw_session_stats",
+        "raw_cost",
         "raw_kpi_snapshots",
     }
     for row in load_runs:

@@ -26,6 +26,7 @@ locals {
     kpi_snapshots   = "schemas/raw_kpi_snapshots.json"
     load_runs       = "schemas/raw_load_runs.json"
     article_chunks  = "schemas/raw_article_chunks.json"
+    cost            = "schemas/raw_cost.json"
   }
 }
 

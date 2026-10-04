@@ -31,6 +31,7 @@ from loader.bq_merge import (
 )
 from loader.emit import build_load_run, stamp_loaded_at, write_ndjson
 from loader.extract_articles import extract_articles
+from loader.extract_cost import extract_cost
 from loader.extract_git import extract_git_commits
 from loader.extract_kpi_snapshots import extract_kpi_snapshots
 from loader.extract_lessons import extract_lessons
@@ -224,6 +225,25 @@ def run(argv: list[str] | None = None) -> list[dict]:
             f"skipped_lines={result.skipped_lines}"
         )
         load_runs.append(build_load_run("raw_session_stats", n, note))
+
+        # raw_cost shares --sessions with session_stats (same source
+        # files, same AOW_EXCLUDED_DIRS mechanism): per-day per-model
+        # token usage + static-table USD estimate
+        # (SPEC-telemetry-dashboard_design.md). extract_cost converts
+        # per-file failures into result.note instead of raising, so a
+        # corrupt transcript cannot abort the rest of this run.
+        cost = extract_cost(args.sessions)
+        cost_rows = stamp_loaded_at(cost.rows)
+        cost_n = write_ndjson(cost_rows, out_dir / "raw_cost.ndjson")
+        cost_skipped = ", ".join(cost.skipped_dirs) if cost.skipped_dirs else "none"
+        cost_note = (
+            f"scanned {len(args.sessions)} session dir(s); "
+            f"skipped {len(cost.skipped_dirs)} excluded dir(s): {cost_skipped}; "
+            f"skipped_lines={cost.skipped_lines}"
+        )
+        if cost.note:
+            cost_note += f"; file errors: {cost.note}"
+        load_runs.append(build_load_run("raw_cost", cost_n, cost_note))
 
     if args.kpi:
         result = extract_kpi_snapshots(

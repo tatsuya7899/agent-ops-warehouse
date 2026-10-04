@@ -86,10 +86,41 @@ done
 
 `terraform init` above uses local state (fine for trying this out). This repo's own deployment instead uses a remote GCS backend -- copy `terraform/backend.hcl.example` to `backend.hcl` (gitignored, your own bucket) and run `terraform init -backend-config=backend.hcl` if you want the same.
 
+## Weekly refresh (the chain that keeps the public page alive)
+
+The public telemetry page reads a generated `telemetry.json`, not BigQuery — the data stays fresh only while this whole chain runs (human-triggered, weekly):
+
+```bash
+# 1. Re-extract every source. Point --sessions only at personal session
+#    dirs, or set AOW_EXCLUDED_DIRS to skip non-personal ones (see above).
+AOW_EXCLUDED_DIRS="dir-substring-1,dir-substring-2" \
+  .venv/bin/python -m loader --repos ~/Developer/*/ \
+  --articles ~/Developer/note-articles/published \
+  --lessons ~/Developer/_ops/lessons \
+  --metrics ~/Developer/METRICS.md \
+  --x-strategy ~/Developer/note-articles/X-STRATEGY.md \
+  --sessions ~/.claude/projects/*/ --kpi --out out/
+
+# 2. Reload raw tables. --replace is required, not optional: the loader
+#    re-emits full snapshots, so loading without it double-counts rows —
+#    silently inflating e.g. SUM(cost_usd) on the public page.
+for t in articles cost git_commits kpi_snapshots lessons load_runs \
+         metrics_monthly session_stats x_posts; do
+  bq --project_id=agent-ops-warehouse load \
+    --source_format=NEWLINE_DELIMITED_JSON --replace raw.$t out/raw_$t.ndjson
+done
+
+# 3. Re-export the public artifact, then commit+push on the portfolio side
+.venv/bin/python -m scripts.export_public_telemetry \
+  --out ~/Developer/tatsuyasasaki-portfolio/src/data/telemetry.json --verify
+```
+
+`--verify` re-queries BigQuery and reports per-series value matches against the committed file (FR-2: no hand-typed values). `--check` does the same comparison without re-querying, for the drift check.
+
 Free-tier envelope: BigQuery sandbox works without a card, but comes with two restrictions that only matter in combination -- tables expire in 60 days, and DML (row-level writes/updates) is unavailable, so the raw layer is load-only until billing is on. Neither restriction is undocumented on its own; what's undocumented is what happens when both apply at once to the same free-tier deploy. Enabling billing lifts the DML restriction but does **not** clear an existing dataset's default expiration — the dataset must be updated (or recreated), which surfaces here as Terraform drift; that is exactly how a checklist item should be encoded.
 
-**Verified reproducible from a clean project (2026-08-13):** a fresh GCP project, `terraform init && terraform apply`, no prior state — the warehouse (3 datasets, 9 tables) stands up in under a minute of actual `apply` time. Two bugs surfaced and were fixed by this test: `rag_api_image` had no default (blocked the bare Quickstart `apply` above until you'd already built and pushed a Docker image you don't need yet) and the GCS backend was hardcoded to this author's own private bucket (blocked `terraform init` itself for anyone else). Both are what "clean-fork reproduction test" in the project history refers to.
-<!-- VERIFY: count(glob="agent-ops-warehouse/terraform/schemas/raw_*.json") == 9 -->
+**Verified reproducible from a clean project (2026-08-13):** a fresh GCP project, `terraform init && terraform apply`, no prior state — the warehouse (3 datasets, 10 tables) stands up in under a minute of actual `apply` time. Two bugs surfaced and were fixed by this test: `rag_api_image` had no default (blocked the bare Quickstart `apply` above until you'd already built and pushed a Docker image you don't need yet) and the GCS backend was hardcoded to this author's own private bucket (blocked `terraform init` itself for anyone else). Both are what "clean-fork reproduction test" in the project history refers to.
+<!-- VERIFY: count(glob="agent-ops-warehouse/terraform/schemas/raw_*.json") == 10 -->
 
 ## RAG API
 
@@ -123,7 +154,7 @@ Cost is bounded, not just "should be free": every query has BigQuery's `maximum_
 ## Development
 
 ```bash
-pytest -q          # 151 tests, TDD-first
+pytest -q          # 190 tests, TDD-first
 ruff check .       # lint
 terraform fmt -check && terraform validate
 ```
