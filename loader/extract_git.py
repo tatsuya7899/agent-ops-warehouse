@@ -18,10 +18,14 @@ from pathlib import Path
 # Non-personal repositories are never listed here.
 ALLOWED_REPOS: tuple[str, ...] = (
     "Developer",
+    "_ops",
     "note-articles",
+    "zenn-articles",
     "tatsuyasasaki-portfolio",
-    "training-cockpit",
-    "aipm_v0",
+    "agent-ops-warehouse",
+    "runanchor",
+    "sagi-shield",
+    "agentic-hackathon-vol5",
 )
 
 _FIELD_SEP = "\x1f"

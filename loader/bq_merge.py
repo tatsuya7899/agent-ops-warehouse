@@ -24,7 +24,7 @@ drop staging" three-step shape):
     3. drop_staging  -- remove the scratch staging table.
 
 Dedup key for raw_git_commits is the composite (repo, commit_hash), not
-commit_hash alone: SPEC Section 3.1 tracks five repositories, and a
+commit_hash alone: SPEC Section 3.1 tracks multiple repositories, and a
 commit_hash collision across two unrelated (independent) repositories,
 while astronomically unlikely, is not ruled out by git's hash space the
 way it would be within a single repo's own history.
