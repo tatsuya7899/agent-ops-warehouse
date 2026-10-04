@@ -77,3 +77,40 @@ def test_extract_git_commits_skips_repo_outside_allowlist(tmp_path):
 
     assert result.rows == []
     assert result.skipped_repos == ["excluded-repo"]
+
+
+def test_extract_git_commits_skips_allowlisted_name_that_is_not_a_repo(tmp_path):
+    """An allow-listed directory name that is not a git repo must be
+    reported, not silently counted as zero commits."""
+    plain = tmp_path / "note-articles"
+    plain.mkdir()
+    (plain / "a.txt").write_text("not a repo\n")
+
+    result = extract_git_commits([str(plain)], allowed_repos=("note-articles",))
+
+    assert result.rows == []
+    assert result.skipped_repos == ["note-articles (not a git repo)"]
+
+
+def test_extract_git_commits_skips_allowlisted_subdir_of_another_repo(tmp_path):
+    """A subdirectory inside a different repository must not inherit the
+    parent's history under the subdirectory's name (the _ops/Developer
+    mislabeling case)."""
+    outer = _init_repo(tmp_path / "Developer")
+    _commit(outer, "a.txt", "root file\n", "outer commit")
+    subdir = outer / "_ops"
+    subdir.mkdir()
+
+    result = extract_git_commits([str(subdir)], allowed_repos=("_ops",))
+
+    assert result.rows == []
+    assert result.skipped_repos == ["_ops (not a repo root; inside Developer)"]
+
+
+def test_extract_git_commits_reports_nonexistent_allowed_path(tmp_path):
+    result = extract_git_commits(
+        [str(tmp_path / "note-articles")], allowed_repos=("note-articles",)
+    )
+
+    assert result.rows == []
+    assert result.skipped_repos == ["note-articles (not a git repo)"]

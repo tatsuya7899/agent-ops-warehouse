@@ -18,7 +18,6 @@ from pathlib import Path
 # Non-personal repositories are never listed here.
 ALLOWED_REPOS: tuple[str, ...] = (
     "Developer",
-    "_ops",
     "note-articles",
     "zenn-articles",
     "tatsuyasasaki-portfolio",
@@ -61,6 +60,14 @@ def extract_git_commits(
             skipped.append(repo_name)
             continue
 
+        root_name = _repo_root_name(repo)
+        if root_name is None:
+            skipped.append(f"{repo_name} (not a git repo)")
+            continue
+        if root_name != repo_name:
+            skipped.append(f"{repo_name} (not a repo root; inside {root_name})")
+            continue
+
         commits = _log_commits(repo)
         stats = _log_shortstats(repo)
 
@@ -80,6 +87,26 @@ def extract_git_commits(
             )
 
     return GitExtractionResult(rows=rows, skipped_repos=skipped)
+
+
+def _repo_root_name(repo: Path) -> str | None:
+    """Return the basename of the git repo root containing ``repo``.
+
+    ``None`` when the path is not inside any git work tree. A subdirectory
+    of a larger repository returns that repository's root name, which lets
+    the caller distinguish "this directory is its own repo" from "this
+    directory merely lives inside a repo" (the latter would mislabel the
+    parent's whole history under the subdirectory's name).
+    """
+    result = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    return Path(result.stdout.strip()).name
 
 
 def _log_commits(repo: Path) -> list[dict]:
