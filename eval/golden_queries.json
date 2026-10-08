@@ -1,0 +1,101 @@
+{
+  "_comment": "ゴールデンクエリ集合(SPEC-rag-eval-harness_20261008)。正解記事が一意に定まる問いだけを置く。expectはpublished/のファイル名に一致させること。既存クエリのexpectを黙って変えない(変える意図はコミット件名に書く)。negativeは「どの記事も正解でない」制御問い。",
+  "queries": [
+    {
+      "id": "q01",
+      "type": "positive",
+      "question": "個人開発のRAG APIはどうやって無料枠内にコストを抑えているか",
+      "expect": "20260902_個人開発のRAG-APIが無料枠を守る仕組み.md",
+      "note": "RAG API自身の設計記事"
+    },
+    {
+      "id": "q02",
+      "type": "positive",
+      "question": "自作KPIの設計が敵対的レビューでどんな指摘を受けたか",
+      "expect": "20260811_自作KPIが敵対的レビューで8件指摘された日.md",
+      "note": ""
+    },
+    {
+      "id": "q03",
+      "type": "positive",
+      "question": "検収をすべて人間がやると何が起きるか",
+      "expect": "20260712_検収を全部人間にしたら詰まった話.md",
+      "note": ""
+    },
+    {
+      "id": "q04",
+      "type": "positive",
+      "question": "画面の見た目は修正できたのにボタンが押せなかったのはなぜか",
+      "expect": "20260712_見た目は直ったのに押せなかった話.md",
+      "note": ""
+    },
+    {
+      "id": "q05",
+      "type": "positive",
+      "question": "AI成果物の測定でGoodhartの罠を防ぐにはどうするか",
+      "expect": "20260802_AI成果測定とGoodhartの罠を防ぐ設計.md",
+      "note": ""
+    },
+    {
+      "id": "q06",
+      "type": "positive",
+      "question": "検証装置が黙って死ぬとはどういう意味か",
+      "expect": "20260929_検証装置は黙って死ぬ.md",
+      "note": ""
+    },
+    {
+      "id": "q07",
+      "type": "positive",
+      "question": "「動いているはず」と言わない検証習慣とはどんなものか",
+      "expect": "20260722_「動いているはず」を禁止した検証習慣.md",
+      "note": ""
+    },
+    {
+      "id": "q08",
+      "type": "positive",
+      "question": "AIモデルの使い分けはどうやって決めるか",
+      "expect": "20260727_AIモデルの使い分けは損害の大きさで決める.md",
+      "note": ""
+    },
+    {
+      "id": "q09",
+      "type": "positive",
+      "question": "BigQueryの無料枠とTerraformで個人基盤をどう作ったか",
+      "expect": "20260813_BigQuery無料枠×Terraformで個人基盤を作る.md",
+      "note": ""
+    },
+    {
+      "id": "q10",
+      "type": "positive",
+      "question": "検問フックが素通りしていた原因は何か",
+      "expect": "20260712_検問フックが素通りしていた話.md",
+      "note": ""
+    },
+    {
+      "id": "q11",
+      "type": "positive",
+      "question": "ルールが紙の上で死ぬとはどういうことか",
+      "expect": "20260930_rules-die-on-paper.md",
+      "note": ""
+    },
+    {
+      "id": "q12",
+      "type": "positive",
+      "question": "AIエージェント組織はどういう構成か",
+      "expect": "20260705_AIエージェント組織.md",
+      "note": ""
+    },
+    {
+      "id": "q13",
+      "type": "negative",
+      "question": "おいしいカレーの作り方を教えて",
+      "note": "制御問い: コーパスに正解なし。最高スコアがノイズ天井未満であること"
+    },
+    {
+      "id": "q14",
+      "type": "negative",
+      "question": "来月の日経平均株価の予測を教えて",
+      "note": "制御問い: 同上"
+    }
+  ]
+}
