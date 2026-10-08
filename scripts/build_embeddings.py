@@ -16,10 +16,13 @@ Phase 3 (FastAPI /query, /health) is out of scope for this script.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import re
+import subprocess
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -36,6 +39,9 @@ INITIAL_BACKOFF_SECONDS = 1.0
 BQ_TABLE = "article_chunks"
 DEFAULT_SCHEMA_PATH = (
     Path(__file__).resolve().parent.parent / "terraform" / "schemas" / "raw_article_chunks.json"
+)
+DEFAULT_LOAD_RUNS_SCHEMA_PATH = (
+    Path(__file__).resolve().parent.parent / "terraform" / "schemas" / "raw_load_runs.json"
 )
 DEFAULT_PUBLISHED_DIR = Path.home() / "Developer" / "note-articles" / "published"
 
@@ -412,6 +418,414 @@ def build_bq_load_args(
     ]
 
 
+def build_bq_append_args(
+    project: str,
+    dataset: str,
+    source_uri: str,
+    table: str = BQ_TABLE,
+    schema_path: str | Path = DEFAULT_SCHEMA_PATH,
+) -> list[str]:
+    """Build the `bq load` argv for an append-only load of article_chunks
+    (SPEC-index-on-publish_design.md FR-2/FR-7: differential updates never
+    carry --replace, so existing chunk rows are never deleted/replaced).
+    Returns the argument list only -- never calls subprocess."""
+    return [
+        "bq",
+        "load",
+        "--source_format=NEWLINE_DELIMITED_JSON",
+        f"--schema={schema_path}",
+        f"{project}:{dataset}.{table}",
+        source_uri,
+    ]
+
+
+# ---------------------------------------------------------------------------
+# 6. Incremental (differential) update mode -- SPEC-index-on-publish.
+#    chunk_published_articles() above still runs over every published
+#    article (chunking is pure/offline and cheap); only the *embedding*
+#    step is restricted to the chunk_ids scripts.index_diff says are
+#    missing from the index (FR-1/FR-6), so the Gemini API is called only
+#    for the differential chunks, not the full corpus.
+# ---------------------------------------------------------------------------
+
+LOCK_STALE_SECONDS = 30 * 60
+MAX_PENDING_REPASSES = 3  # bounds the pending re-run loop against a
+# runaway commit-storm (design Section "データモデル・インターフェース")
+DEFAULT_ENV_FILE = Path.home() / ".config" / "gemini" / "env"
+
+
+def append_ndjson(rows: list[dict], path: str | Path) -> None:
+    """Append rows as NDJSON lines to path (never truncates -- unlike
+    loader.emit.write_ndjson's "w"-mode, which would erase prior audit
+    history on every run; design Section "既存アーキテクチャとの整合")."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row, ensure_ascii=False))
+            f.write("\n")
+
+
+def _parse_run_note(note: str) -> dict[str, str]:
+    if not isinstance(note, str):
+        return {}
+    return dict(item.split("=", 1) for item in note.split(";") if "=" in item)
+
+
+def detect_interrupted_run(runs_path: str | Path) -> str | None:
+    """Scan index_update_runs.ndjson for a phase=start row with no matching
+    phase=complete row for the same run_id (scenario 9). Returns the first
+    such run_id, or None if every recorded run completed (or the file does
+    not exist yet)."""
+    runs_path = Path(runs_path)
+    if not runs_path.exists():
+        return None
+    open_runs: dict[str, bool] = {}
+    for line in runs_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            # An interrupted append is exactly what this function exists
+            # to detect -- a half-written trailing line must not kill the
+            # detector itself (review P1).
+            logger.warning("skipping corrupt audit line in %s", runs_path)
+            continue
+        if not isinstance(row, dict):
+            continue
+        note = _parse_run_note(row.get("exclusions_note", ""))
+        run_id = note.get("run_id")
+        if run_id is None:
+            continue
+        if note.get("phase") == "start":
+            open_runs[run_id] = True
+        elif note.get("phase") == "complete":
+            open_runs.pop(run_id, None)
+    return next(iter(open_runs), None)
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except (OSError, ProcessLookupError):
+        return False
+    return True
+
+
+def acquire_lock(lock_path: str | Path, now: float | None = None) -> bool:
+    """Single-execution lock (design: "ロック+pending"). A lock is valid
+    (blocks a new run) only while its pid is alive AND it was acquired
+    less than LOCK_STALE_SECONDS ago -- anything else is stale and gets
+    overwritten. Returns True iff this call acquired the lock."""
+    lock_path = Path(lock_path)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    now = time.time() if now is None else now
+    payload = json.dumps({"pid": os.getpid(), "acquired_at": now})
+    while True:
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            pass  # exists -- fall through to the staleness check
+        else:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(payload)
+            return True
+        parsed = False
+        try:
+            data = json.loads(lock_path.read_text(encoding="utf-8"))
+            parsed = isinstance(data, dict)
+        except (OSError, json.JSONDecodeError):
+            data = {}
+        if parsed:
+            pid = data.get("pid")
+            acquired_at = data.get("acquired_at")
+            alive = isinstance(pid, int) and _pid_alive(pid)
+            fresh = (
+                isinstance(acquired_at, (int, float))
+                and (now - acquired_at) < LOCK_STALE_SECONDS
+            )
+            if alive and fresh:
+                return False
+            # dead pid or stale timestamp -> reclaim below
+        else:
+            # Unparseable file: a lock caught between O_EXCL create and
+            # write looks exactly like this. If its mtime is fresh it is
+            # probably a live acquire in progress -- do not steal it;
+            # only an old corrupt file is reclaimed (review P2 race).
+            try:
+                if (now - lock_path.stat().st_mtime) < LOCK_STALE_SECONDS:
+                    return False
+            except OSError:
+                return False  # vanished mid-check or unreadable: give up this round
+        # Stale or corrupt: remove and retry the atomic create.
+        # O_EXCL makes the re-create race-free -- two processes that both
+        # unlink still let only one win the create (review P1).
+        try:
+            lock_path.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def release_lock(lock_path: str | Path) -> None:
+    Path(lock_path).unlink(missing_ok=True)
+
+
+def mark_pending(pending_path: str | Path) -> None:
+    pending_path = Path(pending_path)
+    pending_path.parent.mkdir(parents=True, exist_ok=True)
+    pending_path.write_text("1", encoding="utf-8")
+
+
+def consume_pending(pending_path: str | Path) -> bool:
+    pending_path = Path(pending_path)
+    if pending_path.exists():
+        pending_path.unlink()
+        return True
+    return False
+
+
+def resolve_api_key(api_key_env: str, env_file: str | Path) -> str | None:
+    """Env var first, then --env-file (default ~/.config/gemini/env),
+    matching the existing with-gemini zsh-helper convention referenced in
+    main()'s SystemExit message below. Returns None (never raises) when
+    neither source has the key -- callers decide whether that is fatal
+    (it is only fatal once the differential chunk set is non-empty;
+    scenario 2 must reach 0 API calls without ever needing a key)."""
+    key = os.environ.get(api_key_env)
+    if key:
+        return key
+    env_file = Path(env_file)
+    if not env_file.exists():
+        return None
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, value = line.partition("=")
+        name = name.strip()
+        # Real env files (incl. ~/.config/gemini/env) use `export KEY=...`
+        # -- a bare-name match misses them and kills every hook-launched
+        # run, since the hook environment has no exported key (review P0).
+        if name.startswith("export "):
+            name = name[len("export "):].strip()
+        if name == api_key_env:
+            return value.strip().strip('"').strip("'")
+    return None
+
+
+def run_incremental(args: argparse.Namespace) -> int:
+    """Differential index update (scenarios 1-4/6/7/9). Never raises past
+    this function for anything except a missing API key when the
+    differential chunk set is non-empty (SystemExit, matching the
+    full-rebuild path's existing failure mode) -- a post-commit/post-merge
+    hook caller must never see this process block or crash the commit
+    (FR-6/scenario 6), which is why on_published_commit.sh always launches
+    this via `nohup ... &` rather than inline."""
+    # Imported lazily (not at module import time) to avoid a circular
+    # import: scripts.index_diff imports scripts.build_embeddings at
+    # module load time for chunk_published_articles(); by the time this
+    # function actually runs, both modules are already fully initialized.
+    from scripts.index_diff import compute_index_diff
+
+    out_dir = Path(args.out)
+    lock_path = out_dir / ".index_update.lock"
+    pending_path = out_dir / ".index_update.pending"
+    runs_path = out_dir / "index_update_runs.ndjson"
+
+    interrupted = detect_interrupted_run(runs_path)
+    if interrupted:
+        logger.warning("previous index_update run %s did not complete", interrupted)
+
+    try:
+        acquired = acquire_lock(lock_path)
+    except OSError as exc:
+        # e.g. out/ permissions: under nohup this would otherwise die
+        # silently -- log and exit cleanly (the commit must never block).
+        logger.error("could not acquire index-update lock: %s", exc)
+        return 0
+    if not acquired:
+        mark_pending(pending_path)
+        logger.info("index update already running; marked pending and exiting")
+        return 0
+
+    total_loaded = 0
+    total_skipped: list[str] = []
+    try:
+        passes = 0
+        while True:
+            passes += 1
+            run_id = uuid.uuid4().hex[:8]
+            run_audit_rows: list[dict] = []
+
+            def record_audit(row: dict) -> None:
+                run_audit_rows.append(row)
+                append_ndjson([row], runs_path)
+
+            def ship_audit() -> None:
+                """Append this run's audit rows to raw.load_runs via a
+                dedicated per-run file -- already-shipped history rows in
+                index_update_runs.ndjson are never re-appended (design
+                P1-3). Runs that found no diff ship their start+complete
+                pair too: it is the evidence the hook fired at all."""
+                if not args.execute:
+                    return
+                audit_path = out_dir / f"load_runs_{run_id}.ndjson"
+                write_ndjson(run_audit_rows, audit_path)
+                audit_args = build_bq_append_args(
+                    project=args.project,
+                    dataset=args.dataset,
+                    table="load_runs",
+                    source_uri=str(audit_path),
+                    schema_path=DEFAULT_LOAD_RUNS_SCHEMA_PATH,
+                )
+                audit_proc = subprocess.run(
+                    audit_args, capture_output=True, text=True, timeout=120
+                )
+                if audit_proc.returncode != 0:
+                    logger.error(
+                        "bq load (load_runs append) failed: %s",
+                        audit_proc.stderr.strip()[:200],
+                    )
+
+            record_audit(
+                build_load_run(
+                    "index_update",
+                    0,
+                    f"run_id={run_id};phase=start;trigger={args.trigger}",
+                )
+            )
+
+            diff, expected_by_file = compute_index_diff(args.published_dir)
+            repair_ids = set(diff.repair_chunk_ids(expected_by_file))
+
+            if not repair_ids:
+                # scenario 2: zero diff -> zero embedding calls, no API
+                # key resolution at all.
+                record_audit(
+                    build_load_run(
+                        "index_update",
+                        0,
+                        f"run_id={run_id};phase=complete;trigger={args.trigger};"
+                        "load=not_executed;verify=skipped;"
+                        "skipped_ids=none;verify_missing=none",
+                    )
+                )
+                ship_audit()
+                break
+
+            chunk_rows = [
+                row
+                for file_chunks in expected_by_file.values()
+                for cid, row in file_chunks.items()
+                if cid in repair_ids
+            ]
+
+            api_key = resolve_api_key(args.api_key_env, args.env_file)
+            if not api_key:
+                raise SystemExit(
+                    f"{args.api_key_env} is not set and not found in {args.env_file}; "
+                    "cannot call the Gemini embedding API."
+                )
+            client = build_gemini_client(api_key)
+
+            def embed_fn(text: str, _client=client) -> list[float]:
+                return call_embedding_api(_client, text, task_type="RETRIEVAL_DOCUMENT")
+
+            embedded_rows, skipped_ids = embed_chunks(chunk_rows, embed_fn)
+            rows = build_ndjson_rows(embedded_rows)
+            # Chunk rows and audit rows live in differently-named per-run
+            # files: the delta file feeds raw.article_chunks, the
+            # load_runs file feeds raw.load_runs. Naming either just
+            # "load_runs" while it held chunk rows would be a silent
+            # schema-mismatch trap for a later manual load.
+            delta_path = out_dir / f"article_chunks_delta_{run_id}.ndjson"
+            n = write_ndjson(rows, delta_path) if rows else 0
+
+            bq_args = build_bq_append_args(
+                project=args.project,
+                dataset=args.dataset,
+                source_uri=str(delta_path),
+                schema_path=args.schema_path,
+            )
+            # load/verify are recorded as explicit states, not collapsed
+            # into the id list -- a durable audit row must distinguish
+            # "verified: nothing missing" from "could not verify"
+            # (review P2).
+            verify_state = "skipped"
+            verify_missing: list[str] = []
+            if not rows:
+                # Every chunk skipped after retries -> empty delta. Loading
+                # an empty file would record load=failed on a run that
+                # simply had nothing to load (review P2).
+                load_status = "skipped_empty"
+                logger.info("no embedded rows -- skipping bq load")
+            elif args.execute:
+                proc = subprocess.run(bq_args, capture_output=True, text=True, timeout=120)
+                if proc.returncode != 0:
+                    load_status = "failed"
+                    logger.error("bq load (append) failed: %s", proc.stderr.strip()[:200])
+                else:
+                    load_status = "ok"
+                    # Grounding check (design: "--executeはload後にロードした
+                    # chunk_idが索引に存在することを再クエリで検証"): the
+                    # load returning success is thin evidence -- re-query
+                    # the index and confirm the ids are actually there.
+                    loaded_ids = {r["chunk_id"] for r in rows}
+                    try:
+                        from scripts.index_diff import fetch_indexed_rows
+
+                        verified_ids = {r["chunk_id"] for r in fetch_indexed_rows()}
+                        verify_missing = sorted(loaded_ids - verified_ids)
+                        verify_state = "ok"
+                    except Exception as exc:  # noqa: BLE001 -- verify is diagnostic
+                        verify_state = "unverified"
+                        logger.warning("post-load index verify failed: %s", exc)
+                    if verify_missing:
+                        logger.warning(
+                            "post-load verify: %d chunk_id(s) absent from index: %s",
+                            len(verify_missing),
+                            verify_missing,
+                        )
+            else:
+                load_status = "not_executed"
+                logger.info("bq load command (not executed): %s", " ".join(bq_args))
+                print(" ".join(bq_args))
+
+            total_loaded += n
+            total_skipped.extend(skipped_ids)
+            skipped_note = ", ".join(skipped_ids) if skipped_ids else "none"
+            verify_note = ", ".join(verify_missing) if verify_missing else "none"
+            complete_row = build_load_run(
+                "index_update",
+                n,
+                f"run_id={run_id};phase=complete;trigger={args.trigger};"
+                f"load={load_status};verify={verify_state};"
+                f"skipped_ids={skipped_note};verify_missing={verify_note}",
+            )
+            record_audit(complete_row)
+            ship_audit()
+
+            # Check the pass cap BEFORE consuming pending: a marker that
+            # arrives during the final pass must survive for the next run
+            # rather than being consumed and dropped (review P2).
+            if passes >= MAX_PENDING_REPASSES:
+                logger.info("pass cap reached (%d); leaving pending for next run", passes)
+                break
+            if not consume_pending(pending_path):
+                break
+    finally:
+        release_lock(lock_path)
+
+    logger.info(
+        "index update complete: %d row(s) loaded, %d skipped: %s",
+        total_loaded,
+        len(total_skipped),
+        total_skipped or "none",
+    )
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # 5. main() -- wires 1-4 together (SPEC Section 9 phase 2)
 # ---------------------------------------------------------------------------
@@ -451,17 +865,54 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Chunk and log only -- skip embedding calls and ndjson/bq-load output entirely.",
     )
+    parser.add_argument(
+        "--incremental",
+        action="store_true",
+        help=(
+            "Differential mode (SPEC-index-on-publish): embed only the chunk_ids "
+            "scripts.index_diff reports missing/partial, then `bq load` (append, "
+            "no --replace). Mutually exclusive in practice with --dry-run-chunks."
+        ),
+    )
+    parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="With --incremental, actually run the append `bq load` via subprocess.",
+    )
+    parser.add_argument(
+        "--env-file",
+        default=str(DEFAULT_ENV_FILE),
+        help=(
+            "With --incremental, fallback source for the Gemini API key when "
+            "--api-key-env is not set in the environment (default: "
+            "~/.config/gemini/env)."
+        ),
+    )
+    parser.add_argument(
+        "--trigger",
+        default="manual",
+        choices=["manual", "hook"],
+        help="With --incremental, recorded in the audit row's exclusions_note.",
+    )
     return parser.parse_args(argv)
 
 
-def main(argv: list[str] | None = None) -> list[dict]:
+def main(argv: list[str] | None = None) -> list[dict] | int:
     """Chunk -> embed -> ndjson -> (unexecuted) bq load command (SPEC
     Section 9 phase 2). Never calls the real Gemini API or `bq` itself in
     this repo's own test/dev runs -- only when an operator runs this file
     directly with a real GEMINI_API_KEY set (post-CEO-confirmation,
-    SPEC Section 7.1)."""
+    SPEC Section 7.1).
+
+    --incremental (SPEC-index-on-publish) dispatches to run_incremental()
+    instead and returns an int exit code, rather than the row list every
+    other mode returns -- callers (tests, on_published_commit.sh) branch
+    on args.incremental to know which shape to expect."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     args = parse_args(argv)
+
+    if args.incremental:
+        return run_incremental(args)
 
     result = chunk_published_articles(args.published_dir)
     if args.dry_run_chunks:

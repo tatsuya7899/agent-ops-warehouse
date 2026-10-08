@@ -13,11 +13,21 @@ generation (SPEC-agent-ops-warehouse.md Section 5, phase P0).
 (Section 3.3). Executing it for real requires billing enabled on the
 target GCP project -- the P0 sandbox rejects DML outright -- so
 `--execute` is never exercised in this repo's own CI/test runs.
+
+`--check-index` is the second opt-in exception (SPEC-index-on-publish
+design "触るファイル" row for this file): at the END of the run it
+invokes `python -m scripts.index_diff --check` as a warning-only
+backstop -- published/index drift and missing post-commit/post-merge
+hooks are reported on stderr but never abort the loader (the check is
+diagnostic, not a gate). The weekly manual invocation passes this flag;
+the default run keeps its no-BigQuery profile.
 """
 from __future__ import annotations
 
 import argparse
 import pathlib
+import subprocess
+import sys
 from pathlib import Path
 
 from loader.bq_merge import (
@@ -145,6 +155,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="BigQuery dataset id (required with --merge).",
     )
     parser.add_argument(
+        "--check-index",
+        action="store_true",
+        help=(
+            "Run `python -m scripts.index_diff --check` as a warning-only "
+            "final stage (published/ vs raw.article_chunks drift + missing "
+            "git hooks). The weekly invocation passes this flag; failures "
+            "never abort the loader."
+        ),
+    )
+    parser.add_argument(
         "--out",
         required=True,
         help="Output directory for NDJSON files and the load ledger.",
@@ -260,7 +280,60 @@ def run(argv: list[str] | None = None) -> list[dict]:
     if args.merge:
         _run_merge_flag(args, out_dir)
 
+    if args.check_index:
+        try:
+            index_diff_check(args)
+        except Exception as exc:  # noqa: BLE001 -- diagnostic, never a gate
+            print(f"warning: index check stage failed ({exc})", file=sys.stderr)
+
     return load_runs
+
+
+def index_diff_check(args: argparse.Namespace) -> None:
+    """Final warning stage: shell out to `python -m scripts.index_diff
+    --check` against the same published/ dir this run loaded (or the
+    canonical one when --articles was not given).
+
+    Subprocess (not in-process import) on purpose: a child process keeps
+    the loader's stdout free of the report and isolates index_diff's own
+    subprocess/sys.path setup from the loader process.
+
+    All output goes to stderr; every failure mode (missing interpreter,
+    bq auth failure, non-clean diff) degrades to a warning line."""
+    # Same canonical default as scripts.build_embeddings.DEFAULT_PUBLISHED_DIR
+    # (replicated rather than imported -- keeping the loader's import
+    # surface minimal).
+    published_dir = args.articles or str(
+        Path.home() / "Developer" / "note-articles" / "published"
+    )
+    note_articles_dir = str(Path(published_dir).parent)
+    try:
+        proc = subprocess.run(
+            [
+                sys.executable, "-m", "scripts.index_diff", "--check",
+                "--published-dir", published_dir,
+                "--note-articles-dir", note_articles_dir,
+            ],
+            cwd=Path(__file__).resolve().parent.parent,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(f"warning: index check could not run ({exc})", file=sys.stderr)
+        return
+    if proc.returncode == 0:
+        print("index diff: clean", file=sys.stderr)
+        return
+    if proc.stdout.strip():
+        print(proc.stdout.rstrip(), file=sys.stderr)
+    detail = proc.stderr.strip()
+    print(
+        f"warning: index diff reported drift/failure "
+        f"(exit={proc.returncode})"
+        + (f": {detail[:200]}" if detail else ""),
+        file=sys.stderr,
+    )
 
 
 def _run_merge_flag(args: argparse.Namespace, out_dir: Path) -> None:

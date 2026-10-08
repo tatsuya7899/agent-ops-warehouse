@@ -29,23 +29,26 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
 
+# Bootstrap: allow `python3 eval/run_eval.py` (not only
+# `python -m eval.run_eval`) by putting the repo root on sys.path so
+# `scripts.index_diff` imports resolve (SPEC-index-on-publish design row
+# for this file).
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# Module-level (not `from x import f`) so tests can inject via
+# monkeypatch.setattr(scripts.index_diff, "compute_index_diff", fake) --
+# the same injection convention index_diff documents for fetch_fn.
+import scripts.index_diff as index_diff  # noqa: E402
+
 GOLDEN_PATH = Path(__file__).resolve().parent / "golden_queries.json"
 DEFAULT_API_URL = "https://rag-api-kgjvrywpmq-uc.a.run.app"
 DEFAULT_TOP_K = 5
 TIMEOUT_SEC = 60
-# Standard SQL resolves the fully-qualified table name without
-# backtick-quoting — see the NOTE on indexed_filenames for why the
-# literal ` form must be avoided in this environment.
-BQ_INDEX_SQL = (
-    "SELECT DISTINCT filename "
-    "FROM agent-ops-warehouse.raw.article_chunks"
-)
 
 # Score bands mirror the article-search SKILL's measured ranges
 # (hit 0.71-0.84 / noise 0.53-0.55). 0.60-0.70 is the grey zone:
@@ -87,30 +90,6 @@ def post_query(api_url: str, token: str, question: str, top_k: int,
     if not isinstance(payload, dict) or "results" not in payload:
         raise EvalRuntimeError("/query response missing 'results'")
     return payload
-
-
-def indexed_filenames() -> set[str]:
-    """Distinct filenames present in raw.article_chunks via bq.
-    Injectable boundary — tests inject a fake set instead.
-
-    NOTE: the SQL deliberately avoids backtick-quoting the table path —
-    a literal ` inside a shell command trips the Studio guard's
-    command-substitution pattern (cmdname-via-subst). Standard SQL
-    resolves the fully-qualified name without it."""
-    proc = subprocess.run(
-        [
-            "bq", "query", "--project_id=agent-ops-warehouse",
-            "--use_legacy_sql=false", "--format=json", BQ_INDEX_SQL,
-        ],
-        capture_output=True, text=True, timeout=120,
-    )
-    if proc.returncode != 0:
-        raise EvalRuntimeError(f"bq index check failed: {proc.stderr.strip()[:200]}")
-    try:
-        rows = json.loads(proc.stdout or "[]")
-    except json.JSONDecodeError as exc:
-        raise EvalRuntimeError("bq index check returned non-JSON") from exc
-    return {row["filename"] for row in rows if "filename" in row}
 
 
 def coverage_check(published_dir: Path, indexed: set[str]) -> list[str]:
@@ -290,15 +269,21 @@ def main(argv: list[str] | None = None) -> int:
     indexed = None
     unindexed_published: list[str] | None = None
     if args.check_index:
+        # Delegated to the shared diff checker (SPEC-index-on-publish:
+        # 1実装2導線). missing+missing_empty are the published files with
+        # zero index presence — the same set the old DISTINCT-filename
+        # query produced as unindexed_published.
+        pub_dir = Path(args.published_dir) if args.published_dir else (
+            Path(__file__).resolve().parents[2]
+            / "note-articles" / "published")
         try:
-            indexed = indexed_filenames()
-            pub_dir = Path(args.published_dir) if args.published_dir else (
-                Path(__file__).resolve().parents[2]
-                / "note-articles" / "published")
-            unindexed_published = coverage_check(pub_dir, indexed)
-        except EvalRuntimeError as exc:
+            diff, _expected = index_diff.compute_index_diff(str(pub_dir))
+        except index_diff.IndexDiffError as exc:
             # fail soft — coverage separation is diagnostic, not a gate
             print(f"warning: index check skipped ({exc})", file=sys.stderr)
+        else:
+            indexed = set(diff.indexed_filenames)
+            unindexed_published = sorted(diff.missing + diff.missing_empty)
 
     def call_fn(question: str, top_k: int) -> dict:
         return post_query(api_url, token, question, top_k)
