@@ -82,7 +82,7 @@ jobs:
         with:
           args: -color
       - name: "zizmor(informational・非ブロッキング。baseline実測2026-09-13: 23件medium9/high9)"
-        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e # v0.7.1
         continue-on-error: true
         with:
           # 敵対的レビューで指摘(2026-09-13・m-2是正): version未固定だとzizmor自体の
