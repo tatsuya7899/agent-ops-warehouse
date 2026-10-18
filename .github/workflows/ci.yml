@@ -104,7 +104,7 @@ jobs:
         run: |
           terraform init -backend=false
           terraform validate
-      - uses: terraform-linters/setup-tflint@v4
+      - uses: terraform-linters/setup-tflint@v6
       - name: tflint
         run: tflint --chdir=.
 
